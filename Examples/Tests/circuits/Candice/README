@@ -13,3 +13,5 @@ inputs_candice7 - invert logic to subtract off superconductor, add mu difference
 inputs_candice8 - first curve
 inputs_candice9 - fix PEC edges, robustify "do nothing" case to for work for flag 0, -1, -2, ...
 inputs_candice10 - use Ey source with alternating sign on each side of the signal line
+inputs_candice11 - add another curve and straight line, move soft source inside of etch region
+inputs_candice12 - more curves
