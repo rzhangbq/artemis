@@ -40,6 +40,8 @@ macroscopic.epsilon_function(x,y,z) = "eps_0 + eps_0 * (eps_r_si - 1.) * (z <= h
 #macroscopic.mu_function(x,y,z) = "mu_0 + mu_0 * (mu_r_si - 1.) * (z <= h_si)"
 macroscopic.mu_function(x,y,z) = "mu_0 + mu_0 * (mu_r_test - 1.) * (z > h_si) * (z < h_si + dz) *
                                             (1
+                                            -(x > 1237.5e-6) * (x < 1255.e-6) * (y > -2500.e-6 - ddy) * (y < 1302.5e-6 + ddy)
+                                            -(x > 1285.5e-6) * (x < 1302.5e-6) * (y > -2500.e-6 - ddy) * (y < 1302.5e-6 + ddy)
                                             -(x > -50.e-6 + ddx) * (x < -40.e-6 - ddx) * (y > -335.e-6 + ddy) * (y < 335.e-6 - ddy)
                                             -(x > -40.e-6 - ddx) * (x < ddx) * (y > 325.e-6 + ddy) * (y < 335.e-6 - ddy)
                                             -(x > -40.e-6 - ddx) * (x < ddx) * (y > -335.e-6 + ddy) * (y < -325.e-6 - ddy)
@@ -219,6 +221,8 @@ warpx.E_excitation_on_grid_style = parse_E_excitation_grid_function
 
 warpx.Ex_excitation_flag_function(x,y,z) = "flag_hs * (z > h_si - ddz) * (z < h_si + ddz) *
                                             (1
+                                            -(x > 1237.5e-6) * (x < 1255.e-6) * (y > -2500.e-6 - ddy) * (y < 1302.5e-6 + ddy)
+                                            -(x > 1285.5e-6) * (x < 1302.5e-6) * (y > -2500.e-6 - ddy) * (y < 1302.5e-6 + ddy)
                                             -(x > -50.e-6 + ddx) * (x < -40.e-6 - ddx) * (y > -335.e-6 + ddy) * (y < 335.e-6 - ddy)
                                             -(x > -40.e-6 - ddx) * (x < ddx) * (y > 325.e-6 + ddy) * (y < 335.e-6 - ddy)
                                             -(x > -40.e-6 - ddx) * (x < ddx) * (y > -335.e-6 + ddy) * (y < -325.e-6 - ddy)
@@ -329,6 +333,8 @@ warpx.Ex_excitation_flag_function(x,y,z) = "flag_hs * (z > h_si - ddz) * (z < h_
 
 warpx.Ey_excitation_flag_function(x,y,z) = "flag_hs * (z > h_si - ddz) * (z < h_si + ddz) *
                                             (1
+                                            -(x > 1237.5e-6) * (x < 1255.e-6) * (y > -2500.e-6 - ddy) * (y < 1302.5e-6 + ddy)
+                                            -(x > 1285.5e-6) * (x < 1302.5e-6) * (y > -2500.e-6 - ddy) * (y < 1302.5e-6 + ddy)
                                             -(x > -50.e-6 + ddx) * (x < -40.e-6 - ddx) * (y > -335.e-6 + ddy) * (y < 335.e-6 - ddy)
                                             -(x > -40.e-6 - ddx) * (x < ddx) * (y > 325.e-6 + ddy) * (y < 335.e-6 - ddy)
                                             -(x > -40.e-6 - ddx) * (x < ddx) * (y > -335.e-6 + ddy) * (y < -325.e-6 - ddy)
