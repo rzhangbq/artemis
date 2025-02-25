@@ -333,7 +333,8 @@ warpx.Ex_excitation_flag_function(x,y,z) = "flag_hs * (z > h_si - ddz) * (z < h_
                                                 (sqrt( (x-845.e-6)*(x-845.e-6) + (y+1560.e-6)*(y+1560.e-6) ) < 110.e-6)
                                             -(x > 460.e-6 - ddx) * (x < 845.e-6 + ddx) * (y > -1670.e-6 + ddy) * (y < -1660.e-6 - ddy)
                                             -(x > 460.e-6 - ddx) * (x < 845.e-6 + ddx) * (y > -1640.e-6 + ddy) * (y < -1630.e-6 - ddy)
-                                            )"
+                                            )
+                                            + flag_ss * ( (x > 1237.5e-6 + ddx) * (x < 1255.e-6 - ddx) + (x > 1285.e-6 + ddx) * (x < 1302.5e-6 - ddx)) * (y > -2500.e-6 - ddy) * (y < -2500.e-6 + ddy) * (z > h_si - ddz) * (z < h_si + ddz)"
 
 warpx.Ey_excitation_flag_function(x,y,z) = "flag_hs * (z > h_si - ddz) * (z < h_si + ddz) *
                                             (1
@@ -447,14 +448,14 @@ warpx.Ey_excitation_flag_function(x,y,z) = "flag_hs * (z > h_si - ddz) * (z < h_
                                                 (sqrt( (x-845.e-6)*(x-845.e-6) + (y+1560.e-6)*(y+1560.e-6) ) < 110.e-6)
                                             -(x > 460.e-6 - ddx) * (x < 845.e-6 + ddx) * (y > -1670.e-6 + ddy) * (y < -1660.e-6 - ddy)
                                             -(x > 460.e-6 - ddx) * (x < 845.e-6 + ddx) * (y > -1640.e-6 + ddy) * (y < -1630.e-6 - ddy)
-                                            )
-                                            + flag_ss * ( (y >= 10.e-6 + ddy) * (y <= 20.e-6 - ddy) + (y >= -20.e-6 + ddy) * (y <= -10.e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > dx - ddx) * (x < dx + ddx) "
+                                            )"
 
 warpx.Ez_excitation_flag_function(x,y,z) = "flag_none"
 
-warpx.Ex_excitation_grid_function(x,y,z,t) = "0."
-warpx.Ey_excitation_grid_function(x,y,z,t) = "exp(-(t-3*TP)**2/(2*TP**2))*sin(2*pi*freq*t) *
-                                              ( (y >= 10.e-6 + ddy) * (y <= 20.e-6 - ddy) - (y >= -20.e-6 + ddy) * (y <= -10.e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > dx - ddx) * (x < dx + ddx)"
+warpx.Ex_excitation_grid_function(x,y,z,t) = "exp(-(t-3*TP)**2/(2*TP**2))*sin(2*pi*freq*t) *
+                                              ( (x > 1237.5e-6 + ddx) * (x < 1255.e-6 - ddx) - (x > 1285.e-6 + ddx) * (x < 1302.5e-6 - ddx)) * (y > -2500.e-6 - ddy) * (y < -2500.e-6 + ddy) * (z > h_si - ddz) * (z < h_si + ddz)"
+
+warpx.Ey_excitation_grid_function(x,y,z,t) = "0."
 warpx.Ez_excitation_grid_function(x,y,z,t) = "0."
 
 ###############
