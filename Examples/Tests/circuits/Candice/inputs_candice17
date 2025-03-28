@@ -7,13 +7,12 @@ max_step = 8000
 
 amr.n_cell = n_cellx n_celly n_cellz
 amr.max_grid_size = max_grid_size
-amx.max_grid_size = 160 2000 32
 amr.blocking_factor = blocking_factor
 amr.refine_grid_layout = 1  # if n_MPI > n_grids, the grids will be successively divided in half until n_MPI <= n_grids
 
 geometry.dims = 3
-geometry.prob_lo = -900.e-6 -3000.e-6 0.
-geometry.prob_hi =  1500.e-6 2000.e-6 320.e-6
+geometry.prob_lo = -2000.e-6 -3000.e-6 0.
+geometry.prob_hi =  1500.e-6  2000.e-6 320.e-6
 
 amr.max_level = 0
 
@@ -42,12 +41,17 @@ macroscopic.epsilon_function(x,y,z) = "eps_0 + eps_0 * (eps_r_si - 1.) * (z <= h
 
 #macroscopic.mu_function(x,y,z) = "mu_0 + mu_0 * (mu_r_si - 1.) * (z <= h_si)"
 
-# lines 1-4:   readout resonator
-# lines 5-9:   capacitor
-# lines 10-14: entrance to meanding line
-# lines 15-64: meandering line
+# lines 1-4:   qubit control
+# lines 5-9:   readout resonator
+# lines 9-13:  capacitor
+# lines 14-18: entrance to meanding line
+# lines 19-68: meandering line
 macroscopic.mu_function(x,y,z) = "mu_0 + mu_0 * (mu_r_test - 1.) * (z > h_si) * (z < h_si + dz) *
                                             (1
+                                            -(x > -1760.e-6 + ddx) * (x < -795.e-6 - ddx) * (y > -32.5e-6 + ddy) * (y < -27.5e-6 - ddy)
+                                            -(x > -1760.e-6 + ddx) * (x < -795.e-6 - ddx) * (y > -20.e-6 + ddy) * (y < -15.e-6 - ddy)
+                                            -(x > -1760.e-6 + ddx) * (x < -1755.e-6 - ddx) * (y > -27.5e-6 - ddy) * (y < -20.e-6 + ddy)
+                                            -(x > -800.e-6 + ddx) * (x < -795.e-6 - ddx) * (y > -27.5e-6 - ddy) * (y < -20.e-6 + ddy)
                                             -(x > 1237.5e-6 + ddx) * (x < 1255.e-6 - ddx) * (y > -2565.e-6 - ddy) * (y < 1795.e-6 + ddy)
                                             -(x > 1285.5e-6 + ddx) * (x < 1302.5e-6 - ddx) * (y > -2565.e-6 - ddy) * (y < 1795.e-6 + ddy)
                                             -(x > 1237.5e-6 + ddx) * (x < 1302.5e-6 - ddx) * (y > -2582.5e-6 + ddy) * (y < -2565.e-6 - ddy)
@@ -112,6 +116,10 @@ macroscopic.mu_function(x,y,z) = "mu_0 + mu_0 * (mu_r_test - 1.) * (z > h_si) * 
                                                 (sqrt( (x-880.e-6)*(x-880.e-6) + (y + 460.e-6)*(y + 460.e-6) ) < 110.e-6)
                                             -(x > 495.e-6 - ddx) * (x < 885.e-6 + ddx) * (y > -570.e-6 + ddy) * (y < -560.e-6 - ddy)
                                             -(x > 495.e-6 - ddx) * (x < 885.e-6 + ddx) * (y > -540.e-6 + ddy) * (y < -530.e-6 - ddy)
+                                            -(x > -1760.e-6 + ddx) * (x < -795.e-6 - ddx) * ((y - offset_y) > -32.5e-6 + ddy) * ((y - offset_y) < -27.5e-6 - ddy)
+                                            -(x > -1760.e-6 + ddx) * (x < -795.e-6 - ddx) * ((y - offset_y) > -20.e-6 + ddy) * ((y - offset_y) < -15.e-6 - ddy)
+                                            -(x > -1760.e-6 + ddx) * (x < -1755.e-6 - ddx) * ((y - offset_y) > -27.5e-6 - ddy) * ((y - offset_y) < -20.e-6 + ddy)
+                                            -(x > -800.e-6 + ddx) * (x < -795.e-6 - ddx) * ((y - offset_y) > -27.5e-6 - ddy) * ((y - offset_y) < -20.e-6 + ddy)
                                             -(x > -695.e-6 + ddx) * (x < -160.e-6 - ddx) * ((y - offset_y) > -372.5e-6 + ddy) * ((y - offset_y) < -272.5e-6 - ddy)
                                             -(x > -695.e-6 + ddx) * (x < -160.e-6 - ddx) * ((y - offset_y) > 272.5e-6 + ddy) * ((y - offset_y) < 372.5e-6 - ddy)
                                             -(x > -695.e-6 + ddx) * (x < -595.e-6 - ddx) * ((y - offset_y) > -272.5e-6 - ddy) * ((y - offset_y) < 272.5e-6 + ddy)
@@ -181,7 +189,7 @@ macroscopic.mu_function(x,y,z) = "mu_0 + mu_0 * (mu_r_test - 1.) * (z > h_si) * 
 # domain size
 # n_cellx/y/z and Lx/y/z are needed to calculate dx/dy/dz
 ###############
-my_constants.n_cellx = 960
+my_constants.n_cellx = 1400
 my_constants.n_celly = 2000
 my_constants.n_cellz = 32
 my_constants.max_grid_size = 2000
