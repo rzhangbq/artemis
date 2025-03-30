@@ -6,13 +6,13 @@
 max_step = 8000
 
 amr.n_cell = n_cellx n_celly n_cellz
-amr.max_grid_size = max_grid_size
+amr.max_grid_size = max_grid_sizex max_grid_sizey max_grid_sizez
 amr.blocking_factor = blocking_factor
 amr.refine_grid_layout = 1  # if n_MPI > n_grids, the grids will be successively divided in half until n_MPI <= n_grids
 
 geometry.dims = 3
-geometry.prob_lo = -2000.e-6 -3000.e-6 0.
-geometry.prob_hi =  1500.e-6  2000.e-6 320.e-6
+geometry.prob_lo = prob_lox prob_loy prob_loz
+geometry.prob_hi = prob_hix prob_hiy prob_hiz
 
 amr.max_level = 0
 
@@ -192,12 +192,23 @@ macroscopic.mu_function(x,y,z) = "mu_0 + mu_0 * (mu_r_test - 1.) * (z > h_si) * 
 my_constants.n_cellx = 1400
 my_constants.n_celly = 2000
 my_constants.n_cellz = 32
-my_constants.max_grid_size = 2000
+
+my_constants.max_grid_sizex = 700
+my_constants.max_grid_sizey = 500
+my_constants.max_grid_sizez = 32
 my_constants.blocking_factor = 2
 
-my_constants.Lx = 1600.e-6
-my_constants.Ly = 1000.e-6
-my_constants.Lz = 320.e-6
+my_constants.prob_lox = -2000.e-6
+my_constants.prob_loy = -3000.e-6
+my_constants.prob_loz = 0.
+
+my_constants.prob_hix = 1500.e-6
+my_constants.prob_hiy = 2000.e-6
+my_constants.prob_hiz = 320.e-6
+
+my_constants.Lx = prob_hix - prob_lox
+my_constants.Ly = prob_hiy - prob_loy
+my_constants.Lz = prob_hiz - prob_loz
 
 ###############
 # material properties
@@ -525,15 +536,15 @@ warpx.Ey_excitation_flag_function(x,y,z) = "flag_hs * (z > h_si - ddz) * (z < h_
                                             -(x > 495.e-6 - ddx) * (x < 885.e-6 + ddx) * ((y - offset_y) > -570.e-6 + ddy) * ((y - offset_y) < -560.e-6 - ddy)
                                             -(x > 495.e-6 - ddx) * (x < 885.e-6 + ddx) * ((y - offset_y) > -540.e-6 + ddy) * ((y - offset_y) < -530.e-6 - ddy)
                                             )
-                                            + flag_ss * ( (y >= -20.e-6 + ddy) * (y <= -15.e-6 - ddy) + (y >= -32.5e-6 + ddy) * (y <= -27.5e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > -1755.e-6 + dx - ddx) * (x < -1755.e-6 + 2*dx + ddx)"
+                                            + flag_ss * ( (y >= -20.e-6 + ddy) * (y <= -10.e-6 - ddy) + (y >= -32.5e-6 + ddy) * (y <= -27.5e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > -1755.e-6 + dx - ddx) * (x < -1755.e-6 + 2*dx + ddx)"
 
 warpx.Ez_excitation_flag_function(x,y,z) = "flag_none"
 
 
 # This is a source on a qubit control line
 warpx.Ex_excitation_grid_function(x,y,z,t) = "0."                                                                                                                                                                                                      
-warpx.Ey_excitation_grid_function(x,y,z,t) = "exp(-(t-3*TP)**2/(2*TP**2))*sin(2*pi*freq*t) *
-                                              ( (y >= -20.e-6 + ddy) * (y <= -15.e-6 - ddy) - (y >= -32.5e-6 + ddy) * (y <= -27.5e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > -1755.e-6 + dx - ddx) * (x < -1755.e-6 + 2*dx + ddx)"
+warpx.Ey_excitation_grid_function(x,y,z,t) = "exp(-(t-3*TP)**2/(2*TP**2))*sin(2*pi*freq*t) *                                                                                                                                                           
+                                              ( (y >= -20.e-6 + ddy) * (y <= -10.e-6 - ddy) + (y >= -32.5e-6 + ddy) * (y <= -27.5e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > -1755.e-6 + dx - ddx) * (x < -1755.e-6 + 2*dx + ddx)"
 warpx.Ez_excitation_grid_function(x,y,z,t) = "0."
 
 # This is a source on the signal line
