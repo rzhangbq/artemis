@@ -3,7 +3,7 @@
 ################################
 ####### GENERAL PARAMETERS ######
 #################################
-max_step = 8000
+max_step = 10000
 
 amr.n_cell = n_cellx n_celly n_cellz
 amr.max_grid_size = max_grid_sizex max_grid_sizey max_grid_sizez
@@ -536,7 +536,7 @@ warpx.Ey_excitation_flag_function(x,y,z) = "flag_hs * (z > h_si - ddz) * (z < h_
                                             -(x > 495.e-6 - ddx) * (x < 885.e-6 + ddx) * ((y - offset_y) > -570.e-6 + ddy) * ((y - offset_y) < -560.e-6 - ddy)
                                             -(x > 495.e-6 - ddx) * (x < 885.e-6 + ddx) * ((y - offset_y) > -540.e-6 + ddy) * ((y - offset_y) < -530.e-6 - ddy)
                                             )
-                                            + flag_ss * ( (y >= -20.e-6 + ddy) * (y <= -10.e-6 - ddy) + (y >= -32.5e-6 + ddy) * (y <= -27.5e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > -1755.e-6 + dx - ddx) * (x < -1755.e-6 + 2*dx + ddx)"
+                                            + flag_ss * ( (y >= -20.e-6 + ddy) * (y <= -10.e-6 - ddy) + (y >= -32.5e-6 + ddy) * (y <= -27.5e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > -1755.e-6 + dx - ddx) * (x < -1755.e-6 + dx + ddx)"
 
 warpx.Ez_excitation_flag_function(x,y,z) = "flag_none"
 
@@ -544,7 +544,7 @@ warpx.Ez_excitation_flag_function(x,y,z) = "flag_none"
 # This is a source on a qubit control line
 warpx.Ex_excitation_grid_function(x,y,z,t) = "0."                                                                                                                                                                                                      
 warpx.Ey_excitation_grid_function(x,y,z,t) = "exp(-(t-3*TP)**2/(2*TP**2))*sin(2*pi*freq*t) *                                                                                                                                                           
-                                              ( (y >= -20.e-6 + ddy) * (y <= -10.e-6 - ddy) + (y >= -32.5e-6 + ddy) * (y <= -27.5e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > -1755.e-6 + dx - ddx) * (x < -1755.e-6 + 2*dx + ddx)"
+                                              ( (y >= -20.e-6 + ddy) * (y <= -10.e-6 - ddy) + (y >= -32.5e-6 + ddy) * (y <= -27.5e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > -1755.e-6 + dx - ddx) * (x < -1755.e-6 + dx + ddx)"
 warpx.Ez_excitation_grid_function(x,y,z,t) = "0."
 
 # This is a source on the signal line
