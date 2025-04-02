@@ -1,6 +1,8 @@
 # ARTEMIS
 ARTEMIS (Adaptive mesh Refinement Time-domain ElectrodynaMIcs Solver) is a high-performance coupled electrodynamics–micromagnetics solver for full physical modeling of signals in microelectronic circuitry. The overall strategy couples a finite-difference time-domain (FDTD) approach for Maxwell’s equations to a magnetization model described by the Landau–Lifshitz–Gilbert (LLG) equation. The algorithm is implemented in the Exascale Computing Project (ECP) software framework, AMReX, which provides effective scalability on manycore and GPU-based supercomputing architectures. Furthermore, the code leverages ongoing developments of the Exascale Application Code, WarpX, which is primarily being developed for plasma wakefield accelerator modeling. Our temporal coupling scheme provides second-order accuracy in space and time by combining the integration steps for the magnetic field and magnetization into an iterative sub-step that includes a trapezoidal temporal discretization for the magnetization. The performance of the algorithm is demonstrated by the excellent scaling results on NERSC multicore and GPU systems, with a significant (59×) speedup on the GPU using a node-by-node comparison. The utility of our code is validated by performing simulations of transmission lines, rectangle electromagnetic waveguides, magnetically tunable filters, on-chip coplanar waveguides and resonators, magnon-photon coupling circuits, and so on.
 
+For questions, please reach out to Zhi (Jackie) Yao (jackie_zhiyao@lbl.gov) and Andy Nonaka (ajnonaka@lbl.gov).
+
 # Installation
 ## Download AMReX Repository
 ``` git clone git@github.com:AMReX-Codes/amrex.git ```
