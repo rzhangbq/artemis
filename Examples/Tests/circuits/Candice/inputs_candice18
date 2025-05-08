@@ -27,7 +27,7 @@ my_constants.offset_y = -1100.e-6
 #################################
 warpx.verbose = 1
 
-warpx.cfl = 0.9
+warpx.cfl = 0.8
 
 # vacuum or macroscopic
 algo.em_solver_medium = macroscopic
@@ -189,20 +189,20 @@ macroscopic.mu_function(x,y,z) = "mu_0 + mu_0 * (mu_r_test - 1.) * (z > h_si) * 
 # domain size
 # n_cellx/y/z and Lx/y/z are needed to calculate dx/dy/dz
 ###############
-my_constants.n_cellx = 1280
+my_constants.n_cellx = 1400
 my_constants.n_celly = 2000
 my_constants.n_cellz = 32
 
-my_constants.max_grid_sizex = 640
+my_constants.max_grid_sizex = 700
 my_constants.max_grid_sizey = 500
 my_constants.max_grid_sizez = 32
 my_constants.blocking_factor = 2
 
-my_constants.prob_lox = -1755.e-6
+my_constants.prob_lox = -2000.e-6
 my_constants.prob_loy = -3000.e-6
 my_constants.prob_loz = 0.
 
-my_constants.prob_hix = 1445.e-6
+my_constants.prob_hix = 1500.e-6
 my_constants.prob_hiy = 2000.e-6
 my_constants.prob_hiz = 320.e-6
 
@@ -536,7 +536,7 @@ warpx.Ey_excitation_flag_function(x,y,z) = "flag_hs * (z > h_si - ddz) * (z < h_
                                             -(x > 495.e-6 - ddx) * (x < 885.e-6 + ddx) * ((y - offset_y) > -570.e-6 + ddy) * ((y - offset_y) < -560.e-6 - ddy)
                                             -(x > 495.e-6 - ddx) * (x < 885.e-6 + ddx) * ((y - offset_y) > -540.e-6 + ddy) * ((y - offset_y) < -530.e-6 - ddy)
                                             )
-                                            + flag_ss * ( (y >= -20.e-6 + ddy) * (y <= -10.e-6 - ddy) + (y >= -32.5e-6 + ddy) * (y <= -27.5e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > -1755.e-6 - ddx) * (x < -1755.e-6 + ddx)"
+                                            + flag_ss * ( (y >= -20.e-6 + ddy) * (y <= -10.e-6 - ddy) + (y >= -32.5e-6 + ddy) * (y <= -27.5e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > -1755.e-6 + dx - ddx) * (x < -1755.e-6 + dx + ddx)"
 
 warpx.Ez_excitation_flag_function(x,y,z) = "flag_none"
 
@@ -544,7 +544,7 @@ warpx.Ez_excitation_flag_function(x,y,z) = "flag_none"
 # This is a source on a qubit control line
 warpx.Ex_excitation_grid_function(x,y,z,t) = "0."                                                                                                                                                                                                      
 warpx.Ey_excitation_grid_function(x,y,z,t) = "exp(-(t-3*TP)**2/(2*TP**2))*sin(2*pi*freq*t) *                                                                                                                                                           
-                                              ( (y >= -20.e-6 + ddy) * (y <= -10.e-6 - ddy) + (y >= -32.5e-6 + ddy) * (y <= -27.5e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > -1755.e-6 - ddx) * (x < -1755.e-6 + ddx)"
+                                              ( (y >= -20.e-6 + ddy) * (y <= -10.e-6 - ddy) + (y >= -32.5e-6 + ddy) * (y <= -27.5e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > -1755.e-6 + dx - ddx) * (x < -1755.e-6 + dx + ddx)"
 warpx.Ez_excitation_grid_function(x,y,z,t) = "0."
 
 # This is a source on the signal line
@@ -563,3 +563,4 @@ diagnostics.diags_names = plt
 plt.intervals = 100
 plt.fields_to_plot = Ex Ey Ez Bx By Bz mu
 plt.diag_type = Full
+plt.file_min_digits = 7
