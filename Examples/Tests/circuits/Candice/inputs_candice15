@@ -173,7 +173,7 @@ my_constants.Lz = 320.e-6
 # material properties
 ###############
 my_constants.sigma_0 = 0.0
-my_constants.sigma_si = 1.e1
+my_constants.sigma_si = 0.
 
 my_constants.eps_0 = 8.8541878128e-12
 my_constants.eps_r_si = 11.7

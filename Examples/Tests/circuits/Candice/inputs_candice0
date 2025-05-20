@@ -68,7 +68,7 @@ my_constants.Lz = 4.e-6
 ###############
 my_constants.sigma_0 = 0.0
 my_constants.sigma_pd = 1.e7
-my_constants.sigma_si = 1.e1
+my_constants.sigma_si = 0.
 
 my_constants.eps_0 = 8.8541878128e-12
 my_constants.eps_r_pd = 13.
