@@ -25,7 +25,7 @@ boundary.field_hi = pml pml pml
 #################################
 warpx.verbose = 1
 
-warpx.cfl = 0.9
+warpx.cfl = 0.8
 
 # vacuum or macroscopic
 algo.em_solver_medium = macroscopic

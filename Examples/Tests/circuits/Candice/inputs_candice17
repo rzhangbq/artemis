@@ -27,7 +27,7 @@ my_constants.offset_y = -1100.e-6
 #################################
 warpx.verbose = 1
 
-warpx.cfl = 0.9
+warpx.cfl = 0.8
 
 # vacuum or macroscopic
 algo.em_solver_medium = macroscopic
