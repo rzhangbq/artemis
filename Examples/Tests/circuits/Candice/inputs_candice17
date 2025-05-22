@@ -193,8 +193,8 @@ my_constants.n_cellx = 1400
 my_constants.n_celly = 2000
 my_constants.n_cellz = 32
 
-my_constants.max_grid_sizex = 700
-my_constants.max_grid_sizey = 500
+my_constants.max_grid_sizex = 1400
+my_constants.max_grid_sizey = 2000
 my_constants.max_grid_sizez = 32
 my_constants.blocking_factor = 2
 
@@ -544,7 +544,7 @@ warpx.Ez_excitation_flag_function(x,y,z) = "flag_none"
 # This is a source on a qubit control line
 warpx.Ex_excitation_grid_function(x,y,z,t) = "0."                                                                                                                                                                                                      
 warpx.Ey_excitation_grid_function(x,y,z,t) = "exp(-(t-3*TP)**2/(2*TP**2))*sin(2*pi*freq*t) *                                                                                                                                                           
-                                              ( (y >= -20.e-6 + ddy) * (y <= -10.e-6 - ddy) + (y >= -32.5e-6 + ddy) * (y <= -27.5e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > -1755.e-6 + dx - ddx) * (x < -1755.e-6 + dx + ddx)"
+                                              ( (y >= -20.e-6 + ddy) * (y <= -10.e-6 - ddy) - (y >= -32.5e-6 + ddy) * (y <= -27.5e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > -1755.e-6 + dx - ddx) * (x < -1755.e-6 + dx + ddx)"
 warpx.Ez_excitation_grid_function(x,y,z,t) = "0."
 
 # This is a source on the signal line
