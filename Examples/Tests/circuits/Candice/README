@@ -21,4 +21,4 @@ inputs_candice15 - finish geometry
 inputs_candice16 - move source to vertical line
 inputs_candice16 - v01 geometry file
 inputs_candice17 - PML truncating qubit control line
-inputs_candice17 - CFL to 0.8, file_min_digits=7
+inputs_candice17 - CFL to 0.8, file_min_digits=7, freq=8.6e9

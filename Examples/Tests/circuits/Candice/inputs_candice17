@@ -3,7 +3,7 @@
 ################################
 ####### GENERAL PARAMETERS ######
 #################################
-max_step = 10000
+max_step = 1000000
 
 amr.n_cell = n_cellx n_celly n_cellz
 amr.max_grid_size = max_grid_sizex max_grid_sizey max_grid_sizez
@@ -240,7 +240,7 @@ my_constants.w_port = 320.e-6
 
 my_constants.pi = 3.14159265358979
 
-my_constants.freq = 1.e12
+my_constants.freq = 8.6e9
 my_constants.TP = 1./freq
 
 # grid spacing
@@ -560,7 +560,7 @@ warpx.Ez_excitation_grid_function(x,y,z,t) = "0."
 diagnostics.diags_names = plt
 ###############
 # full plotfiles
-plt.intervals = 100
+plt.intervals = 1000
 plt.fields_to_plot = Ex Ey Ez Bx By Bz mu
 plt.diag_type = Full
 plt.file_min_digits = 7
