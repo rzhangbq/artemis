@@ -176,7 +176,7 @@ macroscopic.epsilon_function(x,y,z) = "eps_0 + eps_0 * (eps_r_si - 1.) * (z <= h
 # lines 9-13:  capacitor
 # lines 14-18: entrance to meanding line
 # lines 19-68: meandering line
-macroscopic.mu_function(x,y,z) = "mu_0 + mu_0 * (mu_r_test - 1.) * (z > h_si) * (z < h_si + dz) *
+macroscopic.mu_function(x,y,z) = "mu_0 + mu_0 * (mu_r_si - 1.) * (z <= h_si)"
  
 #################################
 ############ FIELDS #############
