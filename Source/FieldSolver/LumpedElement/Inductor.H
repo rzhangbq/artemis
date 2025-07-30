@@ -31,9 +31,15 @@ public:
     void InitializeInductorMultiFabUsingParser ( amrex::MultiFab *sc_mf,
                                                  amrex::ParserExecutor<3> const& sc_parser, const int lev);
 
-    std::string m_str_inductor_function;
-    std::unique_ptr<amrex::Parser> m_inductor_parser;
-    std::unique_ptr<amrex::MultiFab> m_inductor_mf;
+    std::string m_str_inductor_x_function;
+    std::string m_str_inductor_y_function;
+    std::string m_str_inductor_z_function;
+    std::unique_ptr<amrex::Parser> m_inductor_x_parser;
+    std::unique_ptr<amrex::Parser> m_inductor_y_parser;
+    std::unique_ptr<amrex::Parser> m_inductor_z_parser;
+    std::unique_ptr<amrex::MultiFab> m_inductor_x_mf;
+    std::unique_ptr<amrex::MultiFab> m_inductor_y_mf;
+    std::unique_ptr<amrex::MultiFab> m_inductor_z_mf;
 
      /** Gpu Vector with index type of the jx multifab */
      amrex::GpuArray<int, 3> jx_IndexType;
