@@ -28,8 +28,8 @@ public:
     void InitData ();
     void EvolveInductorJ (amrex::Real dt);
 
-    void InitializeInductorMultiFabUsingParser ( amrex::MultiFab *sc_mf,
-                                                 amrex::ParserExecutor<3> const& sc_parser, const int lev);
+    void InitializeInductorMultiFabUsingParser ( amrex::MultiFab *inductor_mf,
+                                                 amrex::ParserExecutor<3> const& inductor_parser, const int lev);
 
     std::string m_str_inductor_x_function;
     std::string m_str_inductor_y_function;
