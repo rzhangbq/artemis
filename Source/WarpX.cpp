@@ -487,6 +487,9 @@ WarpX::WarpX ()
         m_london = std::make_unique<London>();
     }
 
+    // Lumped inductor
+    m_inductor = std::make_unique<Inductor>();
+
     // Set default values for particle and cell weights for costs update;
     // Default values listed here for the case AMREX_USE_GPU are determined
     // from single-GPU tests on Summit.

@@ -39,6 +39,7 @@
 #include "Utils/Parser/IntervalsParser.H"
 #include "Utils/WarpXAlgorithmSelection.H"
 #include "FieldSolver/London/London.H"
+#include "FieldSolver/LumpedElement/Inductor.H"
 
 #include <AMReX.H>
 #include <AMReX_AmrCore.H>
@@ -100,6 +101,7 @@ public:
     MultiParticleContainer& GetPartContainer () { return *mypc; }
     MacroscopicProperties& GetMacroscopicProperties () { return *m_macroscopic_properties; }
     London& getLondon () { return *m_london; }
+    Inductor& getInductor () { return *m_inductor; }
     MultiDiagnostics& GetMultiDiags () {return *multi_diags;}
 
     ParticleBoundaryBuffer& GetParticleBoundaryBuffer () { return *m_particle_boundary_buffer; }
@@ -1732,7 +1734,8 @@ private:
     std::unique_ptr<MacroscopicProperties> m_macroscopic_properties;
     // London solver
     std::unique_ptr<London> m_london;
-
+    // Lumped inductor
+    std::unique_ptr<Inductor> m_inductor;
 
 #ifdef WARPX_MAG_LLG
     // time advancement scheme of M field
