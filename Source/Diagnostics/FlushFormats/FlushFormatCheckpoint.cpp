@@ -113,6 +113,7 @@ FlushFormatCheckpoint::WriteToFile (
                          amrex::MultiFabFileFullPrefix(lev, checkpointname, default_level_prefix, "Bz_avg_fp"));
         }
 
+        // FIXME - add inductor option
         if (warpx.getis_synchronized() || WarpX::yee_coupled_solver_algo == CoupledYeeSolver::MaxwellLondon) {
             // Need to save j if synchronized because after restart we need j to evolve E by dt/2.
             VisMF::Write(warpx.getcurrent_fp(lev, 0),
@@ -176,6 +177,7 @@ FlushFormatCheckpoint::WriteToFile (
                              amrex::MultiFabFileFullPrefix(lev, checkpointname, default_level_prefix, "Bz_avg_cp"));
             }
 
+            // FIXME - add inductor option
             if (warpx.getis_synchronized() || WarpX::yee_coupled_solver_algo == CoupledYeeSolver::MaxwellLondon) {
                 // Need to save j if synchronized because after restart we need j to evolve E by dt/2.
                 VisMF::Write(warpx.getcurrent_cp(lev, 0),
