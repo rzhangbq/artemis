@@ -109,7 +109,7 @@ Inductor::EvolveInductorJ (amrex::Real dt)
         amrex::Box const& tjx = mfi.tilebox(jx->ixType().toIntVect());
         amrex::Box const& tjy = mfi.tilebox(jy->ixType().toIntVect());
         amrex::Box const& tjz = mfi.tilebox(jz->ixType().toIntVect());
-        
+
         amrex::ParallelFor(tjx, tjy, tjz,
            [=] AMREX_GPU_DEVICE (int i, int j, int k) {
                if (inductor_x_arr(i,j,k) != 0.) {

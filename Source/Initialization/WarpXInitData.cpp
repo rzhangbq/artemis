@@ -426,6 +426,7 @@ WarpX::InitData ()
         m_london->InitData();
     }
 
+    // FIXME - add inductor option
     amrex::Print() << " calling inductor \n";
     m_inductor->InitData();
 
