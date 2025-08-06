@@ -205,7 +205,8 @@ WarpX::Evolve (int numsteps)
         if (electromagnetic_solver_id == ElectromagneticSolverAlgo::None)
         {
             const bool skip_deposition = true;
-            if (WarpX::yee_coupled_solver_algo != CoupledYeeSolver::MaxwellLondon) {
+            // FIXME - add inductor option
+            if (WarpX::yee_coupled_solver_algo != CoupledYeeSolver::MaxwellLondon && false) {
                 PushParticlesandDepose(cur_time, skip_deposition);
             }
         }
@@ -431,7 +432,8 @@ WarpX::OneStep_nosub (Real cur_time)
 
     ExecutePythonCallback("particlescraper");
     ExecutePythonCallback("beforedeposition");
-    if (WarpX::yee_coupled_solver_algo != CoupledYeeSolver::MaxwellLondon) {
+    // FIXME - add inductor option
+    if (WarpX::yee_coupled_solver_algo != CoupledYeeSolver::MaxwellLondon && false) {
         PushParticlesandDepose(cur_time);
     }
 #ifndef WARPX_MAG_LLG
