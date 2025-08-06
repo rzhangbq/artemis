@@ -223,6 +223,7 @@ amrex::Vector<int> WarpX::field_boundary_hi(AMREX_SPACEDIM,0);
 amrex::Vector<ParticleBoundaryType> WarpX::particle_boundary_lo(AMREX_SPACEDIM,ParticleBoundaryType::Absorbing);
 amrex::Vector<ParticleBoundaryType> WarpX::particle_boundary_hi(AMREX_SPACEDIM,ParticleBoundaryType::Absorbing);
 int WarpX::yee_coupled_solver_algo;
+int WarpX::lumped_inductor_algo;
 
 bool WarpX::do_current_centering = false;
 
@@ -488,7 +489,9 @@ WarpX::WarpX ()
     }
 
     // Lumped inductor
-    m_inductor = std::make_unique<Inductor>();
+    if (lumped_inductor_algo == LumpedInductor::On) {
+        m_inductor = std::make_unique<Inductor>();
+    }
 
     // Set default values for particle and cell weights for costs update;
     // Default values listed here for the case AMREX_USE_GPU are determined
@@ -1259,6 +1262,8 @@ WarpX::ReadParameters ()
         ReadExcitationParser();
 
         yee_coupled_solver_algo = GetAlgorithmInteger(pp_algo, "yee_coupled_solver");
+
+        lumped_inductor_algo = GetAlgorithmInteger(pp_algo, "lumped_inductor");
 
         // Load balancing parameters
         std::vector<std::string> load_balance_intervals_string_vec = {"0"};

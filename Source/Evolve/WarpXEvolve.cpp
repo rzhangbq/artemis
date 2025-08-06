@@ -150,8 +150,7 @@ WarpX::Evolve (int numsteps)
                 m_london->EvolveLondonJ(-0.5_rt*dt[0]); // J^(n) to J^(n-1/2) using E^(n)
                 FillBoundaryJ(guard_cells.ng_alloc_EB);
             }
-            // FIXME - add inductor option
-            if (true) {
+            if (WarpX::lumped_inductor_algo == LumpedInductor::On) {
                 m_inductor->EvolveInductorJ(-0.5_rt*dt[0]); // J^(n) to J^(n-1/2) using E^(n)
                 FillBoundaryJ(guard_cells.ng_alloc_EB);
             }
@@ -205,8 +204,8 @@ WarpX::Evolve (int numsteps)
         if (electromagnetic_solver_id == ElectromagneticSolverAlgo::None)
         {
             const bool skip_deposition = true;
-            // FIXME - add inductor option
-            if (WarpX::yee_coupled_solver_algo != CoupledYeeSolver::MaxwellLondon && false) {
+            if (WarpX::yee_coupled_solver_algo != CoupledYeeSolver::MaxwellLondon &&
+                WarpX::lumped_inductor_algo != LumpedInductor::On) {
                 PushParticlesandDepose(cur_time, skip_deposition);
             }
         }
@@ -432,8 +431,8 @@ WarpX::OneStep_nosub (Real cur_time)
 
     ExecutePythonCallback("particlescraper");
     ExecutePythonCallback("beforedeposition");
-    // FIXME - add inductor option
-    if (WarpX::yee_coupled_solver_algo != CoupledYeeSolver::MaxwellLondon && false) {
+    if (WarpX::yee_coupled_solver_algo != CoupledYeeSolver::MaxwellLondon && 
+        WarpX::lumped_inductor_algo != LumpedInductor::On) {
         PushParticlesandDepose(cur_time);
     }
 #ifndef WARPX_MAG_LLG
@@ -445,8 +444,7 @@ WarpX::OneStep_nosub (Real cur_time)
         // fill boundary here
     }
 #endif
-    // FIXME - add inductor option
-    if (true) {
+    if (WarpX::lumped_inductor_algo == LumpedInductor::On) {
         m_inductor->EvolveInductorJ(dt[0]); // J^(n-1/2) to J^(n+1/2) using E^(n)
         FillBoundaryJ(guard_cells.ng_alloc_EB);
     }
