@@ -35,8 +35,7 @@ algo.em_solver_medium = macroscopic
 # laxwendroff or backwardeuler
 algo.macroscopic_sigma_method = laxwendroff
 
-inductor.inductor_x_function(x,y,z) = "0."
-inductor.inductor_x_function(x,y,z) = "25.e-6 * (x > -1502.5e-6) * (x < -1500.e-6) * (y > -25.e-6 - ddy) * (y < -25.e-6 + ddy) * (z > h_si - ddz) * (z < h_si + ddz)"
+inductor.inductor_x_function(x,y,z) = "10.e-9 * (x > -795.e-6) * (x < -792.5e-6) * (y > -25.e-6 - ddy) * (y < -25.e-6 + ddy) * (z > h_si - ddz) * (z < h_si + ddz)"
 inductor.inductor_y_function(x,y,z) = "0."
 inductor.inductor_z_function(x,y,z) = "0."
 
