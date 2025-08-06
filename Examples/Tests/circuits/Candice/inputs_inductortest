@@ -35,7 +35,7 @@ algo.em_solver_medium = macroscopic
 # laxwendroff or backwardeuler
 algo.macroscopic_sigma_method = laxwendroff
 
-inductor.inductor_x_function(x,y,z) = "10.e-9 * (x > -795.e-6) * (x < -792.5e-6) * (y > -25.e-6 - ddy) * (y < -25.e-6 + ddy) * (z > h_si - ddz) * (z < h_si + ddz)"
+inductor.inductor_x_function(x,y,z) = "10.e-9 * (x > -800.e-6) * (x < -797.5e-6) * (y > -25.e-6 - ddy) * (y < -25.e-6 + ddy) * (z > h_si - ddz) * (z < h_si + ddz)"
 inductor.inductor_y_function(x,y,z) = "0."
 inductor.inductor_z_function(x,y,z) = "0."
 
@@ -43,7 +43,7 @@ macroscopic.sigma_function(x,y,z) = "sigma_0 + (sigma_si - sigma_0) * (z <= h_si
                                            (1
                                             -(x > -1750.e-6 + ddx) * (x < -795.e-6 - ddx) * (y > -35.e-6 + ddy) * (y < -30.e-6 - ddy)
                                             -(x > -1750.e-6 + ddx) * (x < -795.e-6 - ddx) * (y > -20.e-6 + ddy) * (y < -15.e-6 - ddy)
-                                            -(x > -800.e-6 + ddx) * (x < -795.e-6 - ddx) * (y > -35.e-6 - ddy) * (y < -20.e-6 + ddy))"
+                                            -(x > -800.e-6 + ddx) * (x < -795.e-6 - ddx) * (y > -30.e-6 - ddy) * (y < -20.e-6 + ddy))"
 
 macroscopic.epsilon_function(x,y,z) = "eps_0 + eps_0 * (eps_r_si - 1.) * (z <= h_si)"
 
