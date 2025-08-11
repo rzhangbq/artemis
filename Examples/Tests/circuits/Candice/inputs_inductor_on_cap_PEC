@@ -41,7 +41,7 @@ inductor.inductor_x_function(x,y,z) = "4.e-10 * (x > -460.e-6) * (x < -395.e-6) 
 inductor.inductor_y_function(x,y,z) = "0."
 inductor.inductor_z_function(x,y,z) = "0."
 
-macroscopic.sigma_function(x,y,z) = "sigma_0 + (sigma_si - sigma_0) * (z <= h_si) + (sigma_metal - sigma_0) *
+macroscopic.sigma_function(x,y,z) = "sigma_0 + (sigma_si - sigma_0) * (z <= h_si) + (sigma_metal - sigma_0) * (z > h_si) * (z < h_si + dz) *
                                   (1
                                    -(x > prob_lox) * (x < prob_hix) * (y > prob_loy) * (y < prob_hiy)
                                    -(x < prob_lox) * (y > -32.5e-6) * (y < -27.5e-6)
