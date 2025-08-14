@@ -3,7 +3,7 @@
 ################################
 ####### GENERAL PARAMETERS ######
 #################################
-max_step = 10000
+max_step = 200000
 
 amr.n_cell = n_cellx n_celly n_cellz
 amr.max_grid_size = max_grid_sizex max_grid_sizey max_grid_sizez
@@ -37,14 +37,14 @@ algo.macroscopic_sigma_method = laxwendroff
 
 algo.lumped_inductor = on
 
-inductor.inductor_x_function(x,y,z) = "4.e-10 * (x > -460.e-6) * (x < -395.e-6) * (y > -ddy) * (y < ddy) * (z > h_si - ddz) * (z < h_si + ddz)"
+inductor.inductor_x_function(x,y,z) = "4.e-13 * (x > -460.e-6) * (x < -395.e-6) * (y > -ddy) * (y < ddy) * (z > h_si - ddz) * (z < h_si + ddz)"
 inductor.inductor_y_function(x,y,z) = "0."
 inductor.inductor_z_function(x,y,z) = "0."
 
 macroscopic.sigma_function(x,y,z) = "sigma_0 + (sigma_si - sigma_0) * (z <= h_si) + (sigma_metal - sigma_0) * (z >= h_si) * (z <= h_si + dz) *
                                            (1
-                                            -(x > -1750.e-6 + ddx) * (x < -795.e-6 - ddx) * (y > -32.5e-6 + ddy) * (y < -27.5e-6 - ddy)
-                                            -(x > -1750.e-6 + ddx) * (x < -795.e-6 - ddx) * (y > -20.e-6 + ddy) * (y < -15.e-6 - ddy)
+                                            -(x < -795.e-6 - ddx) * (y > -32.5e-6 + ddy) * (y < -27.5e-6 - ddy)
+                                            -(x < -795.e-6 - ddx) * (y > -20.e-6 + ddy) * (y < -15.e-6 - ddy)
                                             -(x > -800.e-6 + ddx) * (x < -795.e-6 - ddx) * (y > -27.5e-6 - ddy) * (y < -20.e-6 + ddy)
                                             -(x > -695.e-6 + ddx) * (x < -160.e-6 - ddx) * (y > -372.5e-6 + ddy) * (y < -272.5e-6 - ddy)
                                             -(x > -695.e-6 + ddx) * (x < -160.e-6 - ddx) * (y > 272.5e-6 + ddy) * (y < 372.5e-6 - ddy)
@@ -55,11 +55,6 @@ macroscopic.sigma_function(x,y,z) = "sigma_0 + (sigma_si - sigma_0) * (z <= h_si
 
 macroscopic.epsilon_function(x,y,z) = "eps_0 + eps_0 * (eps_r_si - 1.) * (z <= h_si)"
 
-# lines 1-4:   qubit control
-# lines 5-9:   readout resonator
-# lines 9-13:  capacitor
-# lines 14-18: entrance to meanding line
-# lines 19-68: meandering line
 macroscopic.mu_function(x,y,z) = "mu_0 + mu_0 * (mu_r_si - 1.) * (z <= h_si)"
  
 #################################
@@ -122,7 +117,7 @@ my_constants.w_port = 320.e-6
 
 my_constants.pi = 3.14159265358979
 
-my_constants.freq = 8.6e9
+my_constants.freq = 1.9e11
 my_constants.TP = 1./freq
 
 # grid spacing
@@ -162,7 +157,7 @@ warpx.Ez_excitation_grid_function(x,y,z,t) = "0."
 diagnostics.diags_names = plt
 ###############
 # full plotfiles
-plt.intervals = 100
+plt.intervals = 1000
 plt.fields_to_plot = Ex Ey Ez Bx By Bz sigma
 plt.diag_type = Full
 plt.file_min_digits = 7
