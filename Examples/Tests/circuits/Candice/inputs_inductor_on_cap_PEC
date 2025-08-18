@@ -52,8 +52,8 @@ macroscopic.epsilon_function(x,y,z) = "eps_0 + eps_0 * (eps_r_si - 1.) * (z <= h
 
 macroscopic.mu_function(x,y,z) = "mu_0 + mu_0 * (mu_r_test - 1.) * (z > h_si) * (z < h_si + dz) *
                                            (1
-                                            -(x > -1750.e-6 - ddx) * (x < -795.e-6 - ddx) * (y > -32.5e-6 + ddy) * (y < -27.5e-6 - ddy)
-                                            -(x > -1750.e-6 - ddx) * (x < -795.e-6 - ddx) * (y > -20.e-6 + ddy) * (y < -15.e-6 - ddy)
+                                            -(x < -795.e-6 - ddx) * (y > -32.5e-6 + ddy) * (y < -27.5e-6 - ddy)
+                                            -(x < -795.e-6 - ddx) * (y > -20.e-6 + ddy) * (y < -15.e-6 - ddy)
                                             -(x > -800.e-6 + ddx) * (x < -795.e-6 - ddx) * (y > -27.5e-6 - ddy) * (y < -20.e-6 + ddy)
                                             -(x > -695.e-6 + ddx) * (x < -160.e-6 - ddx) * (y > -372.5e-6 + ddy) * (y < -272.5e-6 - ddy)
                                             -(x > -695.e-6 + ddx) * (x < -160.e-6 - ddx) * (y > 272.5e-6 + ddy) * (y < 372.5e-6 - ddy)
@@ -146,8 +146,8 @@ warpx.E_excitation_on_grid_style = parse_E_excitation_grid_function
 
 warpx.Ex_excitation_flag_function(x,y,z) = "flag_hs * (z > h_si - ddz) * (z < h_si + ddz) *
                                            (1
-                                            -(x > -1750.e-6 - ddx) * (x < -795.e-6 - ddx) * (y > -32.5e-6 + ddy) * (y < -27.5e-6 - ddy)
-                                            -(x > -1750.e-6 - ddx) * (x < -795.e-6 - ddx) * (y > -20.e-6 + ddy) * (y < -15.e-6 - ddy)
+                                            -(x < -795.e-6 - ddx) * (y > -32.5e-6 + ddy) * (y < -27.5e-6 - ddy)
+                                            -(x < -795.e-6 - ddx) * (y > -20.e-6 + ddy) * (y < -15.e-6 - ddy)
                                             -(x > -800.e-6 + ddx) * (x < -795.e-6 - ddx) * (y > -27.5e-6 - ddy) * (y < -20.e-6 + ddy)
                                             -(x > -695.e-6 + ddx) * (x < -160.e-6 - ddx) * (y > -372.5e-6 + ddy) * (y < -272.5e-6 - ddy)
                                             -(x > -695.e-6 + ddx) * (x < -160.e-6 - ddx) * (y > 272.5e-6 + ddy) * (y < 372.5e-6 - ddy)
@@ -158,8 +158,8 @@ warpx.Ex_excitation_flag_function(x,y,z) = "flag_hs * (z > h_si - ddz) * (z < h_
 
 warpx.Ey_excitation_flag_function(x,y,z) = "flag_hs * (z > h_si - ddz) * (z < h_si + ddz) *
                                            (1
-                                            -(x > -1750.e-6 - ddx) * (x < -795.e-6 - ddx) * (y > -32.5e-6 + ddy) * (y < -27.5e-6 - ddy)
-                                            -(x > -1750.e-6 - ddx) * (x < -795.e-6 - ddx) * (y > -20.e-6 + ddy) * (y < -15.e-6 - ddy)
+                                            -(x < -795.e-6 - ddx) * (y > -32.5e-6 + ddy) * (y < -27.5e-6 - ddy)
+                                            -(x < -795.e-6 - ddx) * (y > -20.e-6 + ddy) * (y < -15.e-6 - ddy)
                                             -(x > -800.e-6 + ddx) * (x < -795.e-6 - ddx) * (y > -27.5e-6 - ddy) * (y < -20.e-6 + ddy)
                                             -(x > -695.e-6 + ddx) * (x < -160.e-6 - ddx) * (y > -372.5e-6 + ddy) * (y < -272.5e-6 - ddy)
                                             -(x > -695.e-6 + ddx) * (x < -160.e-6 - ddx) * (y > 272.5e-6 + ddy) * (y < 372.5e-6 - ddy)
