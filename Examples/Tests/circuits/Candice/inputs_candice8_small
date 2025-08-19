@@ -37,14 +37,14 @@ macroscopic.sigma_function(x,y,z) = "sigma_0 + (sigma_si - sigma_0) * (z <= h_si
 
 macroscopic.epsilon_function(x,y,z) = "eps_0 + eps_0 * (eps_r_si - 1.) * (z <= h_si)"
 
-macroscopic.mu_function(x,y,z) = "mu_0 + mu_0 * (mu_r_test - 1.) * (z > h_si) * (z < h_si + dz) * 
+macroscopic.mu_function(x,y,z) = "mu_0 + mu_0 * (mu_r_test - 1.) * (z > h_si) * (z < h_si + dz) *
                                             (1
                                             -(x > -ddx) * (x < 630.e-6 + ddx) * (y > -w_sc/2. - w_air - ddy) * (y < -w_sc/2. + ddy)
                                             -(x > -ddx) * (x < 630.e-6 + ddx) * (y > w_sc/2. + ddy) * (y < w_sc/2. + w_air + ddy)
-                                            -(x > 630.e-6) * (x < 745.e-6 + ddx) * (y > -20.e-6 - ddy) * (y < 95.e-6 + ddy) * 
+                                            -(x > 630.e-6) * (x < 745.e-6 + ddx) * (y > -20.e-6 - ddy) * (y < 95.e-6 + ddy) *
                                                 (sqrt( (x-630.e-6)*(x-630.e-6) + (y-95.e-6)*(y-95.e-6) ) > 75.e-6) *
                                                 (sqrt( (x-630.e-6)*(x-630.e-6) + (y-95.e-6)*(y-95.e-6) ) < 85.e-6)
-                                            -(x > 630.e-6) * (x < 745.e-6 + ddx) * (y > -20.e-6 - ddy) * (y < 95.e-6 + ddy) * 
+                                            -(x > 630.e-6) * (x < 745.e-6 + ddx) * (y > -20.e-6 - ddy) * (y < 95.e-6 + ddy) *
                                                 (sqrt( (x-630.e-6)*(x-630.e-6) + (y-95.e-6)*(y-95.e-6) ) > 105.e-6) *
                                                 (sqrt( (x-630.e-6)*(x-630.e-6) + (y-95.e-6)*(y-95.e-6) ) < 115.e-6)
                                             )"
@@ -124,10 +124,10 @@ warpx.Ex_excitation_flag_function(x,y,z) = "flag_hs * (z > h_si - ddz) * (z < h_
                                             (1
                                             -(x > -ddx) * (x < 630.e-6 + ddx) * (y > -w_sc/2. - w_air - ddy) * (y < -w_sc/2. + ddy)
                                             -(x > -ddx) * (x < 630.e-6 + ddx) * (y > w_sc/2. + ddy) * (y < w_sc/2. + w_air + ddy)
-                                            -(x > 630.e-6) * (x < 745.e-6 + ddx) * (y > -20.e-6 - ddy) * (y < 95.e-6 + ddy) * 
+                                            -(x > 630.e-6) * (x < 745.e-6 + ddx) * (y > -20.e-6 - ddy) * (y < 95.e-6 + ddy) *
                                                 (sqrt( (x-630.e-6)*(x-630.e-6) + (y-95.e-6)*(y-95.e-6) ) > 75.e-6) *
                                                 (sqrt( (x-630.e-6)*(x-630.e-6) + (y-95.e-6)*(y-95.e-6) ) < 85.e-6)
-                                            -(x > 630.e-6) * (x < 745.e-6 + ddx) * (y > -20.e-6 - ddy) * (y < 95.e-6 + ddy) * 
+                                            -(x > 630.e-6) * (x < 745.e-6 + ddx) * (y > -20.e-6 - ddy) * (y < 95.e-6 + ddy) *
                                                 (sqrt( (x-630.e-6)*(x-630.e-6) + (y-95.e-6)*(y-95.e-6) ) > 105.e-6) *
                                                 (sqrt( (x-630.e-6)*(x-630.e-6) + (y-95.e-6)*(y-95.e-6) ) < 115.e-6)
                                             )"
@@ -136,10 +136,10 @@ warpx.Ey_excitation_flag_function(x,y,z) = "flag_hs * (z > h_si - ddz) * (z < h_
                                             (1
                                             -(x > -ddx) * (x < 630.e-6 + ddx) * (y > -w_sc/2. - w_air - ddy) * (y < -w_sc/2. + ddy)
                                             -(x > -ddx) * (x < 630.e-6 + ddx) * (y > w_sc/2. + ddy) * (y < w_sc/2. + w_air + ddy)
-                                            -(x > 630.e-6) * (x < 745.e-6 + ddx) * (y > -20.e-6 - ddy) * (y < 95.e-6 + ddy) * 
+                                            -(x > 630.e-6) * (x < 745.e-6 + ddx) * (y > -20.e-6 - ddy) * (y < 95.e-6 + ddy) *
                                                 (sqrt( (x-630.e-6)*(x-630.e-6) + (y-95.e-6)*(y-95.e-6) ) > 75.e-6) *
                                                 (sqrt( (x-630.e-6)*(x-630.e-6) + (y-95.e-6)*(y-95.e-6) ) < 85.e-6)
-                                            -(x > 630.e-6) * (x < 745.e-6 + ddx) * (y > -20.e-6 - ddy) * (y < 95.e-6 + ddy) * 
+                                            -(x > 630.e-6) * (x < 745.e-6 + ddx) * (y > -20.e-6 - ddy) * (y < 95.e-6 + ddy) *
                                                 (sqrt( (x-630.e-6)*(x-630.e-6) + (y-95.e-6)*(y-95.e-6) ) > 105.e-6) *
                                                 (sqrt( (x-630.e-6)*(x-630.e-6) + (y-95.e-6)*(y-95.e-6) ) < 115.e-6)
                                             )"

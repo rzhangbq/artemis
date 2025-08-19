@@ -431,7 +431,7 @@ WarpX::OneStep_nosub (Real cur_time)
 
     ExecutePythonCallback("particlescraper");
     ExecutePythonCallback("beforedeposition");
-    if (WarpX::yee_coupled_solver_algo != CoupledYeeSolver::MaxwellLondon && 
+    if (WarpX::yee_coupled_solver_algo != CoupledYeeSolver::MaxwellLondon &&
         WarpX::lumped_inductor_algo != LumpedInductor::On) {
         PushParticlesandDepose(cur_time);
     }

@@ -153,8 +153,8 @@ warpx.Ez_excitation_flag_function(x,y,z) = "flag_none"
 
 
 # This is a source on a qubit control line
-warpx.Ex_excitation_grid_function(x,y,z,t) = "0."                                                                                                                                                                                                      
-warpx.Ey_excitation_grid_function(x,y,z,t) = "exp(-(t-3*TP)**2/(TP**2))*sin(2*pi*freq*t) *                                                                                                                                                           
+warpx.Ex_excitation_grid_function(x,y,z,t) = "0."
+warpx.Ey_excitation_grid_function(x,y,z,t) = "exp(-(t-3*TP)**2/(TP**2))*sin(2*pi*freq*t) *
                                               ( (y >= -20.e-6 + ddy) * (y <= -15.e-6 - ddy) - (y >= -32.5e-6 + ddy) * (y <= -27.5e-6 - ddy)) * (z > h_si - ddz) * (z < h_si + ddz) * (x > -1750.e-6 + dx - ddx) * (x < -1750.e-6 + dx + ddx)"
 warpx.Ez_excitation_grid_function(x,y,z,t) = "0."
 
