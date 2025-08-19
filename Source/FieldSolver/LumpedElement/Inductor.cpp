@@ -21,7 +21,7 @@
 
 Inductor::Inductor ()
 {
-    amrex::Print() << " Inductor class is constructed\n";
+    amrex::Print() << " Inductor class is constructed \n";
     ReadParameters();
 }
 
