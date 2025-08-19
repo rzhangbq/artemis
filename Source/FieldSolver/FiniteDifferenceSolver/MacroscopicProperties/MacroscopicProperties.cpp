@@ -240,7 +240,7 @@ MacroscopicProperties::InitData ()
 
         m_sigma_mf->setVal(m_sigma);
 
-    } 
+    }
     else if (m_sigma_s == "parse_sigma_function") {
 
         InitializeMacroMultiFabUsingParser(m_sigma_mf.get(), m_sigma_parser->compile<3>(), lev);
@@ -541,7 +541,7 @@ MacroscopicProperties::InitializeMacroMultiFabFromNumpy (
 
     for (MFIter mfi(*macro_mf); mfi.isValid(); ++mfi) {
         const Box& bx = mfi.validbox();
-        
+
         if (mfi.index() == 0) {
             const auto lo = bx.smallEnd();
             const auto hi = bx.bigEnd();

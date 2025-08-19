@@ -58,7 +58,7 @@ public:
      void InitializeMacroMultiFabFromNumpy (amrex::MultiFab* macro_mf,
                                   const std::string& npy_filename,
                                   const int lev,
-                                  const int m_npy_k_index);        
+                                  const int m_npy_k_index);
      /** Gpu Vector with index type of the conductivity multifab */
      amrex::GpuArray<int, 3> sigma_IndexType;
      /** Gpu Vector with index type of the permittivity multifab */
@@ -313,7 +313,7 @@ private:
      std::string m_sigma_npy_filename;
      std::string m_epsilon_npy_filename;
      std::string m_mu_npy_filename;
-     
+
 
 
 };
