@@ -55,7 +55,10 @@ public:
      void InitializeMacroMultiFabUsingParser (amrex::MultiFab *macro_mf,
                                   amrex::ParserExecutor<3> const& macro_parser,
                                   const int lev);
-
+     void InitializeMacroMultiFabFromNumpy (amrex::MultiFab* macro_mf,
+                                  const std::string& npy_filename,
+                                  const int lev,
+                                  const int m_npy_k_index);        
      /** Gpu Vector with index type of the conductivity multifab */
      amrex::GpuArray<int, 3> sigma_IndexType;
      /** Gpu Vector with index type of the permittivity multifab */
@@ -87,6 +90,8 @@ public:
      amrex::Real m_epsilon = PhysConst::ep0;
      /** Permeability, mu, of the medium */
      amrex::Real m_mu = PhysConst::mu0;
+     /** index to insert the mask */
+     int m_npy_k_index = 0;
      /** Parser Wrappers */
      std::unique_ptr<amrex::Parser> m_sigma_parser;
      std::unique_ptr<amrex::Parser> m_epsilon_parser;
@@ -304,6 +309,12 @@ private:
      std::string m_str_sigma_function;
      std::string m_str_epsilon_function;
      std::string m_str_mu_function;
+
+     std::string m_sigma_npy_filename;
+     std::string m_epsilon_npy_filename;
+     std::string m_mu_npy_filename;
+     
+
 
 };
 
