@@ -53,10 +53,10 @@ jobs:
 
           export PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH}
           export LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
-        which nvcc || echo "nvcc not in PATH!"
+          which nvcc || echo "nvcc not in PATH!"
 
           cmake-easyinstall --prefix=/usr/local \
-            git+https://github.com/openPMD/openPMD-api.git@0.16.1 \
+            git+https://github.com/openPMD/openPMD-api.git@0.15.1 \
             -DopenPMD_USE_PYTHON=OFF    \
             -DBUILD_TESTING=OFF         \
             -DBUILD_EXAMPLES=OFF        \
