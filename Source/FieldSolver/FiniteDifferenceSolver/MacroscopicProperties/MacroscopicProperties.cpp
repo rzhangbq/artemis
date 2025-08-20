@@ -534,29 +534,39 @@ MacroscopicProperties::InitializeMacroMultiFabFromNumpy (
     amrex::Gpu::copy(amrex::Gpu::hostToDevice, host_data.begin(), host_data.end(), data_dev.begin());
     const amrex::Real* dptr = data_dev.data();
 
-    for (MFIter mfi(*macro_mf); mfi.isValid(); ++mfi) {
-        const Box& bx = mfi.validbox();
+    amrex::IntVect iv = macro_mf->ixType().toIntVect();
 
+    for (MFIter mfi(*macro_mf); mfi.isValid(); ++mfi) {
+        // we need to loop over ghost cells since the PML algorithm creates temporary grids with valid
+        // and ghost regions; some may lay on the interior domain and some may lie outside the domain
+        const Box& bx = mfi.tilebox( iv, macro_mf->nGrowVect());
+
+        /*
         if (mfi.index() == 0) {
             const auto lo = bx.smallEnd();
             const auto hi = bx.bigEnd();
             const auto size = bx.size();
 
             amrex::Print() << "fab shape: ["
-                        << size[0] << ", "
-                        << size[1] << ", "
-                        << size[2] << "], index range: ["
-                        << lo[0] << ":" << hi[0] << ", "
-                        << lo[1] << ":" << hi[1] << ", "
-                        << lo[2] << ":" << hi[2] << "]\n";
+                           << size[0] << ", "
+                           << size[1] << ", "
+                           << size[2] << "], index range: ["
+                           << lo[0] << ":" << hi[0] << ", "
+                           << lo[1] << ":" << hi[1] << ", "
+                           << lo[2] << ":" << hi[2] << "]\n";
         }
+        */
+
         Array4<amrex::Real> fab = macro_mf->array(mfi);
 
         ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 
-            if (k == m_npy_k_index_in) {
-                size_t idx2d = i * ny + j;  // equivalent to i*ny*nz + j*nz + 0 when nz=1
-                fab(i, j, k) = dptr[idx2d];
+            // only overwrite macro value from the gds file if you are in the valid region
+            if (i >= 0 && j >= 0 && k >= 0 && i < dom_size[0] && j < dom_size[1] && k < dom_size[2]) {
+                if (k == m_npy_k_index_in) {
+                    size_t idx2d = i * ny + j;  // equivalent to i*ny*nz + j*nz + 0 when nz=1
+                    fab(i, j, k) = dptr[idx2d];
+                }
             }
 
         });
