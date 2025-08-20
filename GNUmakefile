@@ -46,3 +46,5 @@ USE_EB = FALSE
 
 WARPX_HOME := .
 include $(WARPX_HOME)/Source/Make.WarpX
+
+LIBRARIES += -lz
