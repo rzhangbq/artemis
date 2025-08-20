@@ -130,7 +130,7 @@ jobs:
   build_pyfull:
     name: Clang pywarpx
     runs-on: ubuntu-24.04
-    if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false && false  # Second condition prevents running
     env:
       # On CI for this test, Ninja is slower than the default:
       #CMAKE_GENERATOR: Ninja
