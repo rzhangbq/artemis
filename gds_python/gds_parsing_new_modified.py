@@ -62,9 +62,14 @@ plt.tight_layout()
 plt.show()
 
 array_T_clean_new = array_T_clean[100:3900, 100:3900]
+flipped_array = 1 - array_T_clean_new
+
 
 # Save and plot
 array_3d = np.repeat(array_T_clean_new[:, :, np.newaxis], 1, axis=2)
+flipped_array_3d = np.repeat(flipped_array[:, :, np.newaxis], 1, axis=2)
 epsilon = 1e10  # or any small value you choose
 array_3d = array_3d.astype(np.float64) * epsilon
+flipped_array_3d = flipped_array_3d.astype(np.float64) * epsilon
 np.save("array_3d_gds_new_large_8_qubit.npy", array_3d)
+np.save("array_3d_gds_new_large_8_qubit_flipped_v2.npy", flipped_array_3d)
