@@ -58,14 +58,15 @@ MacroscopicProperties::ReadParameters ()
         m_sigma_s = "parse_sigma_npy_file";
         sigma_specified = true;
     }
-    // bool sigma_func_specified = pp_macroscopic.query("sigma_function(x,y,z)", m_str_sigma_function);
-    // bool sigma_npy_specified  = pp_macroscopic.query("sigma_npy_file", m_sigma_npy_filename);
 
-    // if (sigma_func_specified && sigma_npy_specified) {
-    //     m_sigma_s = "parse_sigma_both";
-    //     sigma_specified = true;
-    //     // initialize both later in InitData
-    // }
+    bool sigma_func_specified = pp_macroscopic.query("sigma_function(x,y,z)", m_str_sigma_function);
+    bool sigma_npy_specified  = pp_macroscopic.query("sigma_npy_file", m_sigma_npy_filename);
+    if (sigma_func_specified && sigma_npy_specified) {
+         m_sigma_s = "parse_sigma_both";
+         sigma_specified = true;
+         // initialize both later in InitData
+    }
+
     if (!sigma_specified) {
         std::stringstream warnMsg;
         warnMsg << "Material conductivity is not specified. Using default vacuum value of " <<
@@ -74,7 +75,7 @@ MacroscopicProperties::ReadParameters ()
             warnMsg.str());
     }
     // initialization of sigma (conductivity) with parser
-    if (m_sigma_s == "parse_sigma_function") {
+    if (m_sigma_s == "parse_sigma_function" || m_sigma_s == "parse_sigma_both") {
         utils::parser::Store_parserString(
             pp_macroscopic, "sigma_function(x,y,z)", m_str_sigma_function);
         m_sigma_parser = std::make_unique<amrex::Parser>(
@@ -241,21 +242,15 @@ MacroscopicProperties::InitData ()
         m_sigma_mf->setVal(m_sigma);
 
     }
-    else if (m_sigma_s == "parse_sigma_function") {
-
+    // Step 1: Set a default structure from a function if provided
+    if (m_sigma_s == "parse_sigma_function" || m_sigma_s == "parse_sigma_both") {
         InitializeMacroMultiFabUsingParser(m_sigma_mf.get(), m_sigma_parser->compile<3>(), lev);
-    } else if (m_sigma_s == "parse_sigma_npy_file"){
+    }
+
+    // Step 2: Overwrite with NPY mask if provided
+    if (m_sigma_s == "parse_sigma_npy_file" || m_sigma_s == "parse_sigma_both") {
         InitializeMacroMultiFabFromNumpy(m_sigma_mf.get(), m_sigma_npy_filename, lev, m_npy_k_index);
     }
-    // // Step 1: Set a default structure from a function if provided
-    // if (m_sigma_s == "parse_sigma_function" || m_sigma_s == "parse_sigma_both") {
-    //     InitializeMacroMultiFabUsingParser(m_sigma_mf.get(), m_sigma_parser->compile<3>(), lev);
-    // }
-
-    // // Step 2: Overwrite with NPY mask if provided
-    // if (m_sigma_s == "parse_sigma_npy_file" || m_sigma_s == "parse_sigma_both") {
-    //     InitializeMacroMultiFabFromNumpy(m_sigma_mf.get(), m_sigma_npy_filename, lev);
-    // }
     // Initialize epsilon
     if (m_epsilon_s == "constant") {
 
@@ -490,7 +485,7 @@ MacroscopicProperties::InitializeMacroMultiFabFromNumpy (
     amrex::MultiFab* macro_mf,
     const std::string& npy_filename,
     const int lev,
-    const int m_npy_k_index)
+    const int m_npy_k_index_in)
 {
 
     // Load numpy array
@@ -559,7 +554,7 @@ MacroscopicProperties::InitializeMacroMultiFabFromNumpy (
 
         ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 
-            if (k == m_npy_k_index) {
+            if (k == m_npy_k_index_in) {
                 size_t idx2d = i * ny + j;  // equivalent to i*ny*nz + j*nz + 0 when nz=1
                 fab(i, j, k) = dptr[idx2d];
             }
