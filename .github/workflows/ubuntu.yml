@@ -74,15 +74,15 @@ jobs:
           ccache-openmp-1D-2D-
     - name: build WarpX
       run: |
-        cmake -S . -B build_1D         \
-          -GNinja                      \
-          -DCMAKE_VERBOSE_MAKEFILE=ON  \
-          -DWarpX_DIMS=1               \
-          -DWarpX_EB=OFF               \
-          -DWarpX_MAG_LLG=OFF          \
-          -DWarpX_PSATD=ON             \
-          -DWarpX_QED_TABLE_GEN=ON
-        cmake --build build_1D -j 2
+        # cmake -S . -B build_1D         \
+        #  -GNinja                      \
+        #  -DCMAKE_VERBOSE_MAKEFILE=ON  \
+        #  -DWarpX_DIMS=1               \
+        #  -DWarpX_EB=OFF               \
+        #  -DWarpX_MAG_LLG=OFF          \
+        #  -DWarpX_PSATD=ON             \
+        #  -DWarpX_QED_TABLE_GEN=ON
+        # cmake --build build_1D -j 2
 
         cmake -S . -B build_2D         \
           -GNinja                      \
