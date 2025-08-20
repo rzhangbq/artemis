@@ -71,7 +71,7 @@ jobs:
 
           export PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH}
           export LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
-        which nvcc || echo "nvcc not in PATH!"
+          which nvcc || echo "nvcc not in PATH!"
 
           cmake -S . -B build_sp         \
             -DCMAKE_VERBOSE_MAKEFILE=ON  \
@@ -122,7 +122,7 @@ jobs:
 
           export PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH}
           export LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
-        which nvcc || echo "nvcc not in PATH!"
+          which nvcc || echo "nvcc not in PATH!"
 
           git clone https://github.com/AMReX-Codes/amrex.git ../amrex
           cd ../amrex && git checkout --detach 9d2f762f4897b5f585544baf87a19edd0f0c9560 && cd -
@@ -132,9 +132,9 @@ jobs:
     name: NVHPC@21.11 NVCC/NVC++ Release [tests]
     runs-on: ubuntu-24.04
     if: github.event.pull_request.draft == false
-    env:
-      # For NVHPC, Ninja is slower than the default:
-      # CMAKE_GENERATOR: Ninja
+    # For NVHPC, Ninja is slower than the default:
+    # env:
+    # CMAKE_GENERATOR: Ninja
     steps:
       - uses: actions/checkout@v4
       - name: Dependencies
@@ -158,9 +158,9 @@ jobs:
 
           source /etc/profile.d/modules.sh
           module load /opt/nvidia/hpc_sdk/modulefiles/nvhpc/25.1
-        which nvcc || echo "nvcc not in PATH!"
-        which nvc++ || echo "nvc++ not in PATH!"
-        which nvc || echo "nvc not in PATH!"
+          which nvcc || echo "nvcc not in PATH!"
+          which nvc++ || echo "nvc++ not in PATH!"
+          which nvc || echo "nvc not in PATH!"
           nvcc --version
           nvc++ --version
           nvc --version
