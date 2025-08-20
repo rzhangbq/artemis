@@ -154,14 +154,27 @@ London::InitializeSuperconductorMultiFabUsingParser (
         amrex::ParallelFor (tb,
             [=] AMREX_GPU_DEVICE (int i, int j, int k) {
                 // Shift x, y, z position based on index type (only 3D supported for now)
+#if( AMREX_SPACEDIM == 1)
                 amrex::Real fac_x = (1._rt - iv[0]) * dx_lev[0] * 0.5_rt;
                 amrex::Real x = i * dx_lev[0] + real_box.lo(0) + fac_x;
+
+                // initialize the macroparameter
+                sc_fab(i,0,0) = sc_parser(x,0,0);
+#endif
+#if( AMREX_SPACEDIM == 2)
                 amrex::Real fac_y = (1._rt - iv[1]) * dx_lev[1] * 0.5_rt;
                 amrex::Real y = j * dx_lev[1] + real_box.lo(1) + fac_y;
+
+                // initialize the macroparameter
+                sc_fab(i,j,0) = sc_parser(x,y,0);
+#endif
+#if( AMREX_SPACEDIM == 3)
                 amrex::Real fac_z = (1._rt - iv[2]) * dx_lev[2] * 0.5_rt;
                 amrex::Real z = k * dx_lev[2] + real_box.lo(2) + fac_z;
+
                 // initialize the macroparameter
                 sc_fab(i,j,k) = sc_parser(x,y,z);
+#endif
         });
 
     }
