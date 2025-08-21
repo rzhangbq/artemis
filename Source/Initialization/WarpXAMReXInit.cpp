@@ -12,6 +12,9 @@
 
 #include <memory>
 
+// for MPI_COMM_WORLD in non-MPI build
+using namespace amrex;
+
 namespace {
     /** Overwrite defaults in AMReX Inputs
      *

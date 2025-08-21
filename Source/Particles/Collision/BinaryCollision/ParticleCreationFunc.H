@@ -196,7 +196,7 @@ public:
                     }
                 }
 
-                // Remove p_pair_reaction_weight[i] from the colliding particles' weights
+// Remove p_pair_reaction_weight[i] from the colliding particles' weights
                 amrex::Gpu::Atomic::AddNoRet(&w1[p_pair_indices_1[i]],
                                                 -p_pair_reaction_weight[i]);
                 amrex::Gpu::Atomic::AddNoRet(&w2[p_pair_indices_2[i]],
@@ -204,14 +204,33 @@ public:
 
                 // If the colliding particle weight decreases to zero, remove particle by
                 // setting its id to -1
+                // TODO: Consider using <= std::numeric_limits<amrex::ParticleReal>::min()
+                // instead of <= 0 for numerical robustness
+                // TODO: Consider replacing -1 with amrex::ParticleIdCpus::Invalid for clarity
                 constexpr amrex::Long minus_one_long = -1;
                 if (w1[p_pair_indices_1[i]] <= amrex::ParticleReal(0.))
                 {
-                    particle_ptr_1[p_pair_indices_1[i]].atomicSetID(minus_one_long);
+#if defined(AMREX_USE_OMP)
+#pragma omp atomic write
+                    particle_ptr_1[p_pair_indices_1[i]].id() = minus_one_long;
+#else
+                    amrex::Gpu::Atomic::Exch(
+                        (unsigned long long *)&particle_ptr_1[p_pair_indices_1[i]].id(),
+                        (unsigned long long)minus_one_long
+                    );
+#endif
                 }
                 if (w2[p_pair_indices_2[i]] <= amrex::ParticleReal(0.))
                 {
-                    particle_ptr_2[p_pair_indices_2[i]].atomicSetID(minus_one_long);
+#if defined(AMREX_USE_OMP)
+#pragma omp atomic write
+                    particle_ptr_2[p_pair_indices_2[i]].id() = minus_one_long;
+#else
+                    amrex::Gpu::Atomic::Exch(
+                        (unsigned long long *)&particle_ptr_2[p_pair_indices_2[i]].id(),
+                        (unsigned long long)minus_one_long
+                    );
+#endif
                 }
 
                 // Initialize the product particles' momentum, using a function depending on the
