@@ -215,7 +215,7 @@ public:
                         particle_ptr_1[p_pair_indices_1[i]].id() = minus_one_long;
                     }
 #else
-                    auto *old_ptr = reinterpret_cast<unsigned long long*>(&(particle_ptr_1[p_pair_indices_1[i]].id()));
+                    auto *old_ptr = reinterpret_cast<unsigned long long*>(&(particle_ptr_1[p_pair_indices_1[i]].m_idcpu));
                     amrex::Gpu::Atomic::Exch(old_ptr, (unsigned long long)minus_one_long);
 #endif
                 }
@@ -227,7 +227,7 @@ public:
                         particle_ptr_2[p_pair_indices_2[i]].id() = minus_one_long;
                     }
 #else
-                    auto *old_ptr = reinterpret_cast<unsigned long long*>(&(particle_ptr_2[p_pair_indices_2[i]].id()));
+                    auto *old_ptr = reinterpret_cast<unsigned long long*>(&(particle_ptr_2[p_pair_indices_2[i]].m_idcpu));
                     amrex::Gpu::Atomic::Exch(old_ptr, (unsigned long long)minus_one_long);
 #endif
                 }
