@@ -204,7 +204,7 @@ public:
 
                 // If the colliding particle weight decreases to zero, remove particle by
                 // setting its id to invalid
-                // TODO: Consider using <= std::numeric_limits<amrex::ParticleReal>::min() 
+                // TODO: Consider using <= std::numeric_limits<amrex::ParticleReal>::min()
                 // instead of <= 0 for numerical robustness
                 auto minus_one_long = amrex::ParticleIdCpus::Invalid;
                 if (w1[p_pair_indices_1[i]] <= amrex::ParticleReal(0.))
