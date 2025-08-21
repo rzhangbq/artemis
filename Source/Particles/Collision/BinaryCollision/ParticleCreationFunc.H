@@ -207,7 +207,7 @@ public:
                 // TODO: Consider using <= std::numeric_limits<amrex::ParticleReal>::min()
                 // instead of <= 0 for numerical robustness
                 // TODO: Consider replacing -1 with amrex::ParticleIdCpus::Invalid for clarity
-                constexpr amrex::Long minus_one_long = -1;
+                auto minus_one_long = amrex::ParticleIdCpus::Invalid;
                 if (w1[p_pair_indices_1[i]] <= amrex::ParticleReal(0.))
                 {
 #if defined(AMREX_USE_OMP)
