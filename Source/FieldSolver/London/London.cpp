@@ -171,7 +171,7 @@ London::InitializeSuperconductorMultiFabUsingParser (
 #if( AMREX_SPACEDIM >= 1)
                 amrex::Real fac_x = (1._rt - iv[0]) * dx_lev[0] * 0.5_rt;
                 amrex::Real x = i * dx_lev[0] + real_box.lo(0) + fac_x;
-#if( AMREX_SPACEDIM = 1)
+#if( AMREX_SPACEDIM == 1)
                 // initialize the macroparameter
                 sc_fab(i,0,0) = sc_parser(x,0,0);
 #endif
