@@ -63,7 +63,7 @@ warpx_amrex_init (int& argc, char**& argv, bool const build_parm_parse)
         argc,
         argv,
         build_parm_parse,
-        amrex::MPI_COMM_WORLD,
+        MPI_COMM_WORLD,
         overwrite_amrex_parser_defaults
     );
 }
