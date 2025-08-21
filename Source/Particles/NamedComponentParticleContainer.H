@@ -136,7 +136,7 @@ public:
         if (search == particle_comps.end()) {
             particle_comps[name] = NumRealComps();
             particle_runtime_comps[name] = NumRealComps() - PIdx::nattribs;
-            AddRealComp(communicate);
+            AddRealComp();
         } else {
             amrex::Print() << Utils::TextMsg::Info(
                 name + " already exists in particle_comps, not adding.");
@@ -154,7 +154,7 @@ public:
         if (search == particle_icomps.end()) {
             particle_icomps[name] = NumIntComps();
             particle_runtime_icomps[name] = NumIntComps() - 0;
-            AddIntComp(communicate);
+            AddIntComp();
         } else {
             amrex::Print() << Utils::TextMsg::Info(
                 name + " already exists in particle_icomps, not adding.");
