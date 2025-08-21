@@ -64,7 +64,21 @@ London::InitData()
     }
 
 }
-
+#if( AMREX_SPACEDIM != 3)
+void
+London::EvolveLondonJ (amrex::Real )
+{
+  amrex::Abort("London only works with 3D");
+}
+void
+London::InitializeSuperconductorMultiFabUsingParser (
+                       amrex::MultiFab *,
+                       amrex::ParserExecutor<3> const& ,
+                       const int )
+{
+  amrex::Abort("London only works with 3D");
+}
+#else
 void
 London::EvolveLondonJ (amrex::Real dt)
 {
@@ -181,4 +195,5 @@ London::InitializeSuperconductorMultiFabUsingParser (
 
     }
 }
+#endif
 
