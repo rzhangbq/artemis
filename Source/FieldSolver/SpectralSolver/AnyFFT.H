@@ -8,6 +8,7 @@
 #ifndef ANYFFT_H_
 #define ANYFFT_H_
 
+#if 1 //use_fft
 #include <AMReX_Config.H>
 #include <AMReX_LayoutData.H>
 
