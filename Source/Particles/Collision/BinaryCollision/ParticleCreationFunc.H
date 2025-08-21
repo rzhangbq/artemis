@@ -196,40 +196,39 @@ public:
                     }
                 }
 
-// Remove p_pair_reaction_weight[i] from the colliding particles' weights
+                // Remove p_pair_reaction_weight[i] from the colliding particles' weights
                 amrex::Gpu::Atomic::AddNoRet(&w1[p_pair_indices_1[i]],
                                                 -p_pair_reaction_weight[i]);
                 amrex::Gpu::Atomic::AddNoRet(&w2[p_pair_indices_2[i]],
                                                 -p_pair_reaction_weight[i]);
 
                 // If the colliding particle weight decreases to zero, remove particle by
-                // setting its id to -1
-                // TODO: Consider using <= std::numeric_limits<amrex::ParticleReal>::min()
+                // setting its id to invalid
+                // TODO: Consider using <= std::numeric_limits<amrex::ParticleReal>::min() 
                 // instead of <= 0 for numerical robustness
-                // TODO: Consider replacing -1 with amrex::ParticleIdCpus::Invalid for clarity
                 auto minus_one_long = amrex::ParticleIdCpus::Invalid;
                 if (w1[p_pair_indices_1[i]] <= amrex::ParticleReal(0.))
                 {
 #if defined(AMREX_USE_OMP)
-#pragma omp atomic write
-                    particle_ptr_1[p_pair_indices_1[i]].id() = minus_one_long;
+#pragma omp critical
+                    {
+                        particle_ptr_1[p_pair_indices_1[i]].id() = minus_one_long;
+                    }
 #else
-                    amrex::Gpu::Atomic::Exch(
-                        (unsigned long long *)&particle_ptr_1[p_pair_indices_1[i]].id(),
-                        (unsigned long long)minus_one_long
-                    );
+                    auto *old_ptr = reinterpret_cast<unsigned long long*>(&(particle_ptr_1[p_pair_indices_1[i]].id()));
+                    amrex::Gpu::Atomic::Exch(old_ptr, (unsigned long long)minus_one_long);
 #endif
                 }
                 if (w2[p_pair_indices_2[i]] <= amrex::ParticleReal(0.))
                 {
 #if defined(AMREX_USE_OMP)
-#pragma omp atomic write
-                    particle_ptr_2[p_pair_indices_2[i]].id() = minus_one_long;
+#pragma omp critical
+                    {
+                        particle_ptr_2[p_pair_indices_2[i]].id() = minus_one_long;
+                    }
 #else
-                    amrex::Gpu::Atomic::Exch(
-                        (unsigned long long *)&particle_ptr_2[p_pair_indices_2[i]].id(),
-                        (unsigned long long)minus_one_long
-                    );
+                    auto *old_ptr = reinterpret_cast<unsigned long long*>(&(particle_ptr_2[p_pair_indices_2[i]].id()));
+                    amrex::Gpu::Atomic::Exch(old_ptr, (unsigned long long)minus_one_long);
 #endif
                 }
 
