@@ -128,15 +128,15 @@ public:
     /** Allocate a new run-time real component
      *
      * @param name Name of the new component
-     * @param comm Whether to communicate this component, in the particle Redistribute
+     * @param communicate Whether to communicate this component, in the particle Redistribute (non-zero = true)
      */
-    void AddRealComp (const std::string& name, bool comm=true)
+    void AddRealComp (const std::string& name, int communicate=1)
     {
         auto search = particle_comps.find(name);
         if (search == particle_comps.end()) {
             particle_comps[name] = NumRealComps();
             particle_runtime_comps[name] = NumRealComps() - PIdx::nattribs;
-            AddRealComp(comm);
+            AddRealComp(communicate);
         } else {
             amrex::Print() << Utils::TextMsg::Info(
                 name + " already exists in particle_comps, not adding.");
@@ -146,15 +146,15 @@ public:
     /** Allocate a new run-time integer component
      *
      * @param name Name of the new component
-     * @param comm Whether to communicate this component, in the particle Redistribute
+     * @param communicate Whether to communicate this component, in the particle Redistribute (non-zero = true)
      */
-    void AddIntComp (const std::string& name, bool comm=true)
+    void AddIntComp (const std::string& name, int communicate=1)
     {
         auto search = particle_icomps.find(name);
         if (search == particle_icomps.end()) {
             particle_icomps[name] = NumIntComps();
             particle_runtime_icomps[name] = NumIntComps() - 0;
-            AddIntComp(comm);
+            AddIntComp(communicate);
         } else {
             amrex::Print() << Utils::TextMsg::Info(
                 name + " already exists in particle_icomps, not adding.");
