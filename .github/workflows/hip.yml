@@ -45,6 +45,7 @@ jobs:
           export CC=$(which clang)
 
           cmake -S . -B build_sp \
+            -D_GLIBCXX_ASSERTIONS_DISABLE \
             -DCMAKE_VERBOSE_MAKEFILE=ON \
             -DAMReX_AMD_ARCH=gfx900     \
             -DWarpX_COMPUTE=HIP         \
@@ -101,6 +102,7 @@ jobs:
           export CC=$(which clang)
 
           cmake -S . -B build_2d \
+            -D_GLIBCXX_ASSERTIONS_DISABLE \
             -DCMAKE_VERBOSE_MAKEFILE=ON \
             -DAMReX_AMD_ARCH=gfx900     \
             -DWarpX_DIMS=2              \
