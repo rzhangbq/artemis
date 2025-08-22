@@ -419,8 +419,20 @@ class LibWarpX():
             ctypes.c_char_p(species_name.encode('utf-8')))
 
     def amrex_init(self, argv, mpi_comm=None):
-        if mpi_comm is None:  # or MPI is None:
-            self.libwarpx_so.amrex_init(argv)
+        # --- Construct the ctype list of strings to pass in
+        argc = len(argv)
+
+        # note: +1 since there is an extra char-string array element,
+        #       that ANSII C requires to be a simple NULL entry
+        #       https://stackoverflow.com/a/39096006/2719194
+        argvC = (_LP_c_char * (argc+1))()
+        for i, arg in enumerate(argv):
+            enc_arg = arg.encode('utf-8')
+            argvC[i] = _LP_c_char(enc_arg)
+        argvC[argc] = _LP_c_char(b"\0")  # +1 element must be NULL
+
+        if mpi_comm is None or MPI is None:
+            self.libwarpx_so.amrex_init(argc, argvC)
         else:
             raise Exception("mpi_comm argument not yet supported")
 
