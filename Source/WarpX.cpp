@@ -386,6 +386,7 @@ WarpX::WarpX ()
     phi_fp.resize(nlevs_max);
     current_fp.resize(nlevs_max);
     Efield_fp.resize(nlevs_max);
+    PEC_fp.resize(nlevs_max);
     Bfield_fp.resize(nlevs_max);
     Bfield_sc_fp.resize(nlevs_max);
 #ifdef WARPX_MAG_LLG
@@ -1989,6 +1990,7 @@ WarpX::ClearLevel (int lev)
 #endif
         current_fp[lev][i].reset();
         Efield_fp [lev][i].reset();
+        PEC_fp [lev][i].reset();
         Bfield_fp [lev][i].reset();
         Bfield_sc_fp [lev][i].reset();
 #ifdef WARPX_MAG_LLG
@@ -2313,6 +2315,10 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
     AllocInitMultiFab(Efield_fp[lev][0], amrex::convert(ba, Ex_nodal_flag), dm, ncomps, ngEB, tag("Efield_fp[x]"));
     AllocInitMultiFab(Efield_fp[lev][1], amrex::convert(ba, Ey_nodal_flag), dm, ncomps, ngEB, tag("Efield_fp[y]"));
     AllocInitMultiFab(Efield_fp[lev][2], amrex::convert(ba, Ez_nodal_flag), dm, ncomps, ngEB, tag("Efield_fp[z]"));
+
+    AllocInitMultiFab(PEC_fp[lev][0], amrex::convert(ba, Ex_nodal_flag), dm, ncomps, ngEB, tag("PEC_fp[x]"));
+    AllocInitMultiFab(PEC_fp[lev][1], amrex::convert(ba, Ey_nodal_flag), dm, ncomps, ngEB, tag("PEC_fp[y]"));
+    AllocInitMultiFab(PEC_fp[lev][2], amrex::convert(ba, Ez_nodal_flag), dm, ncomps, ngEB, tag("PEC_fp[z]"));
 
     AllocInitMultiFab(current_fp[lev][0], amrex::convert(ba, jx_nodal_flag), dm, ncomps, ngJ, tag("current_fp[x]"), 0.0_rt);
     AllocInitMultiFab(current_fp[lev][1], amrex::convert(ba, jy_nodal_flag), dm, ncomps, ngJ, tag("current_fp[y]"), 0.0_rt);

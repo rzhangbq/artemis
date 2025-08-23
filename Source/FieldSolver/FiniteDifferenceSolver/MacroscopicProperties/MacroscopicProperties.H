@@ -59,6 +59,13 @@ public:
                                   const std::string& npy_filename,
                                   const int lev,
                                   const int m_npy_k_index_in);
+    
+    void InitializePECFromSigma (amrex::MultiFab* sigma_mf,
+                                 amrex::MultiFab* PECx,
+                                 amrex::MultiFab* PECy,
+                                 amrex::MultiFab* PECz,
+                                 const int lev,
+                                 const int m_npy_k_index_in);
      /** Gpu Vector with index type of the conductivity multifab */
      amrex::GpuArray<int, 3> sigma_IndexType;
      /** Gpu Vector with index type of the permittivity multifab */

@@ -251,6 +251,14 @@ MacroscopicProperties::InitData ()
     if (m_sigma_s == "parse_sigma_npy_file" || m_sigma_s == "parse_sigma_both") {
         InitializeMacroMultiFabFromNumpy(m_sigma_mf.get(), m_sigma_npy_filename, lev, m_npy_k_index);
     }
+
+    // PEC mask
+    amrex::MultiFab * PECx = warpx.get_pointer_PEC_fp(lev,0);
+    amrex::MultiFab * PECy = warpx.get_pointer_PEC_fp(lev,1);
+    amrex::MultiFab * PECz = warpx.get_pointer_PEC_fp(lev,2);
+
+    InitializePECFromSigma(m_sigma_mf.get(), PECx, PECy, PECz, lev, m_npy_k_index);
+    
     // Initialize epsilon
     if (m_epsilon_s == "constant") {
 
@@ -572,4 +580,47 @@ MacroscopicProperties::InitializeMacroMultiFabFromNumpy (
         });
     }
     amrex::Gpu::streamSynchronize();
+}
+
+void
+MacroscopicProperties::InitializePECFromSigma (amrex::MultiFab* sigma_mf,
+                                               amrex::MultiFab* PECx,
+                                               amrex::MultiFab* PECy,
+                                               amrex::MultiFab* PECz,
+                                               const int lev,
+                                               const int m_npy_k_index_in)
+{
+    PECx->setVal(1.);
+    PECy->setVal(1.);
+    PECz->setVal(1.);
+
+    // Ex
+    for (MFIter mfi(*PECx); mfi.isValid(); ++mfi) {
+        const Box& bx = mfi.tilebox();
+
+        Array4<amrex::Real> sigma = sigma_mf->array(mfi);
+        Array4<amrex::Real> Px = PECx->array(mfi);
+        
+        ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+
+            if (k == m_npy_k_index_in) {
+            }
+
+        });
+    }
+
+    // Ey
+    for (MFIter mfi(*PECy); mfi.isValid(); ++mfi) {
+        const Box& bx = mfi.tilebox();
+
+        Array4<amrex::Real> sigma = sigma_mf->array(mfi);
+        Array4<amrex::Real> Py = PECy->array(mfi);
+        
+        ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+
+            if (k == m_npy_k_index_in) {
+            }
+
+        });
+    }
 }
