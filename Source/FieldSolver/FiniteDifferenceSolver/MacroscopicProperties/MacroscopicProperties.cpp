@@ -257,7 +257,16 @@ MacroscopicProperties::InitData ()
     amrex::MultiFab * PECy = warpx.get_pointer_PEC_fp(lev,1);
     amrex::MultiFab * PECz = warpx.get_pointer_PEC_fp(lev,2);
 
-    InitializePECFromSigma(m_sigma_mf.get(), PECx, PECy, PECz, lev, m_npy_k_index);
+    PECx->setVal(1.);
+    PECy->setVal(1.);
+    PECz->setVal(1.);
+
+    bool PEC_mask = false;
+    if (PEC_mask) {
+        InitializePECFromSigma(m_sigma_mf.get(), PECx, PECy, PECz, lev, m_npy_k_index);
+        // no need for sigma anymore
+        m_sigma_mf->setVal(0.);
+    }
     
     // Initialize epsilon
     if (m_epsilon_s == "constant") {
@@ -590,11 +599,7 @@ MacroscopicProperties::InitializePECFromSigma (amrex::MultiFab* sigma_mf,
                                                const int lev,
                                                const int m_npy_k_index_in)
 {
-    PECx->setVal(1.);
-    PECy->setVal(1.);
-    PECz->setVal(1.);
-
-    // Ex
+    // PEC for Ex is on yz edges
     for (MFIter mfi(*PECx); mfi.isValid(); ++mfi) {
         const Box& bx = mfi.tilebox();
 
@@ -604,12 +609,15 @@ MacroscopicProperties::InitializePECFromSigma (amrex::MultiFab* sigma_mf,
         ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 
             if (k == m_npy_k_index_in) {
+                if (sigma(i,j,k) != 0. || sigma(i,j-1,k) != 0) {
+                    Px(i,j,k) = 0.;
+                }
             }
 
         });
     }
 
-    // Ey
+    // PEC for Ey is on xz edges
     for (MFIter mfi(*PECy); mfi.isValid(); ++mfi) {
         const Box& bx = mfi.tilebox();
 
@@ -619,6 +627,9 @@ MacroscopicProperties::InitializePECFromSigma (amrex::MultiFab* sigma_mf,
         ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 
             if (k == m_npy_k_index_in) {
+                if (sigma(i,j,k) != 0. || sigma(i-1,j,k) != 0) {
+                    Py(i,j,k) = 0.;
+                }
             }
 
         });
