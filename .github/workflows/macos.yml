@@ -77,11 +77,7 @@ jobs:
           -DWarpX_openpmd_internal=OFF \
           -DWarpX_PRECISION=SINGLE
         cmake --build build_sp -j 3
-
-        python3 -m pip install --upgrade pip setuptools wheel
-        export WARPX_MPI=ON
-        PYWARPX_LIB_DIR=$PWD/build_sp/lib python3 -m pip wheel .
-        python3 -m pip install *.whl
+        cmake --build build_sp --target pip_install
 
     - name: run pywarpx
       run: |
