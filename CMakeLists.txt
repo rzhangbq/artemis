@@ -300,6 +300,13 @@ if(WarpX_COMPUTE STREQUAL CUDA)
     )
 endif()
 
+if(WarpX_COMPUTE STREQUAL "HIP")
+    # Disable libstdc++ assertions in device code
+    foreach(warpx_tgt IN LISTS _ALL_TARGETS)
+        target_compile_definitions(${warpx_tgt} PRIVATE _GLIBCXX_ASSERTIONS=0)
+    endforeach()
+endif()
+
 # avoid building all object files if we are only used as ABLASTR library
 if(NOT WarpX_APP AND NOT WarpX_LIB)
     set_target_properties(WarpX PROPERTIES
