@@ -120,10 +120,12 @@ public:
         return tmp;
     }
 
-    using amrex::ParticleContainer<0,0,PIdx::nattribs,0,T_Allocator>::NumRealComps;
-    using amrex::ParticleContainer<0,0,PIdx::nattribs,0,T_Allocator>::NumIntComps;
-    using amrex::ParticleContainer<0,0,PIdx::nattribs,0,T_Allocator>::AddRealComp;
-    using amrex::ParticleContainer<0,0,PIdx::nattribs,0,T_Allocator>::AddIntComp;
+    using BaseContainer = amrex::ParticleContainer<0,0,PIdx::nattribs,0,T_Allocator>;
+
+    using BaseContainer::NumRealComps;
+    using BaseContainer::NumIntComps;
+    using BaseContainer::AddRealComp;
+    using BaseContainer::AddIntComp;
 
     /** Allocate a new run-time real component
      *
@@ -136,7 +138,7 @@ public:
         if (search == particle_comps.end()) {
             particle_comps[name] = NumRealComps();
             particle_runtime_comps[name] = NumRealComps() - PIdx::nattribs;
-            AddRealComp(communicate);
+            BaseContainer::AddRealComp(communicate);
         } else {
             amrex::Print() << Utils::TextMsg::Info(
                 name + " already exists in particle_comps, not adding.");
@@ -154,7 +156,7 @@ public:
         if (search == particle_icomps.end()) {
             particle_icomps[name] = NumIntComps();
             particle_runtime_icomps[name] = NumIntComps() - 0;
-            this->AddIntComp(communicate);
+            BaseContainer::AddIntComp(communicate);
         } else {
             amrex::Print() << Utils::TextMsg::Info(
                 name + " already exists in particle_icomps, not adding.");
