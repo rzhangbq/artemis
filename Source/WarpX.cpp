@@ -224,7 +224,7 @@ amrex::Vector<ParticleBoundaryType> WarpX::particle_boundary_lo(AMREX_SPACEDIM,P
 amrex::Vector<ParticleBoundaryType> WarpX::particle_boundary_hi(AMREX_SPACEDIM,ParticleBoundaryType::Absorbing);
 int WarpX::yee_coupled_solver_algo;
 int WarpX::use_PEC_mask = 0;
-int WarpX::lumped_inductor_algo;
+int WarpX::use_lumped_inductor = 0;
 
 bool WarpX::do_current_centering = false;
 
@@ -491,7 +491,7 @@ WarpX::WarpX ()
     }
 
     // Lumped inductor
-    if (lumped_inductor_algo == LumpedInductor::On) {
+    if (use_lumped_inductor) {
         m_inductor = std::make_unique<Inductor>();
     }
 
@@ -1266,7 +1266,7 @@ WarpX::ReadParameters ()
         yee_coupled_solver_algo = GetAlgorithmInteger(pp_algo, "yee_coupled_solver");
 
         pp_algo.query("use_PEC_mask",use_PEC_mask);
-        lumped_inductor_algo = GetAlgorithmInteger(pp_algo, "lumped_inductor");
+        pp_algo.query("use_lumped_inductor",use_lumped_inductor);
 
         // Load balancing parameters
         std::vector<std::string> load_balance_intervals_string_vec = {"0"};
