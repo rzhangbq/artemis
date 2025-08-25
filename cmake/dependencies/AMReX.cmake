@@ -34,6 +34,10 @@ macro(find_amrex)
         else()
             set(AMReX_GPU_BACKEND  "${WarpX_COMPUTE}" CACHE INTERNAL "")
             set(AMReX_OMP          OFF    CACHE INTERNAL "")
+            if(AMReX_GPU_BACKEND STREQUAL "HIP")
+                # Disable libstdc++ assertions in device code
+                target_compile_definitions(amrex PUBLIC _GLIBCXX_ASSERTIONS=0)
+            endif()
         endif()
 
         if(WarpX_EB)
