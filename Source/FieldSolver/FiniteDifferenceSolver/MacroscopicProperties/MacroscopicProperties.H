@@ -55,7 +55,8 @@ public:
      void InitializeMacroMultiFabUsingParser (amrex::MultiFab *macro_mf,
                                   amrex::ParserExecutor<3> const& macro_parser,
                                   const int lev);
-     void InitializeMacroMultiFabFromNumpy (amrex::MultiFab* macro_mf,
+
+    void InitializeMacroMultiFabFromNumpy (amrex::MultiFab* macro_mf,
                                   const std::string& npy_filename,
                                   const int lev,
                                   const int m_npy_k_index_in);
@@ -66,7 +67,8 @@ public:
                                  amrex::MultiFab* PECz,
                                  const int lev,
                                  const int m_npy_k_index_in);
-     /** Gpu Vector with index type of the conductivity multifab */
+
+    /** Gpu Vector with index type of the conductivity multifab */
      amrex::GpuArray<int, 3> sigma_IndexType;
      /** Gpu Vector with index type of the permittivity multifab */
      amrex::GpuArray<int, 3> epsilon_IndexType;
@@ -319,8 +321,6 @@ private:
      std::string m_str_sigma_function;
      std::string m_str_epsilon_function;
      std::string m_str_mu_function;
-
-
 
 };
 

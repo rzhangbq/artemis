@@ -538,17 +538,21 @@ WarpX::OneStep_nosub (Real cur_time)
             // Apply Efiled excitation in the pml region
             ApplyExternalFieldExcitationOnGrid(ExternalFieldType::EfieldExternalPML);
         }
-        // multiply E field by PEC mask
-        const int lev = 0;
-        amrex::MultiFab& Ex = *Efield_fp[lev][0].get();
-        amrex::MultiFab& Ey = *Efield_fp[lev][1].get();
-        amrex::MultiFab& Ez = *Efield_fp[lev][2].get();
-        amrex::MultiFab& PECx = *PEC_fp[lev][0].get();
-        amrex::MultiFab& PECy = *PEC_fp[lev][1].get();
-        amrex::MultiFab& PECz = *PEC_fp[lev][2].get();
-        MultiFab::Multiply(Ex, PECx, 0, 0, 1, 0);
-        MultiFab::Multiply(Ey, PECy, 0, 0, 1, 0);
-        MultiFab::Multiply(Ez, PECz, 0, 0, 1, 0);
+
+        // FIXME move to inputs files
+        bool PEC_mask = false;
+        if (PEC_mask) {
+            // multiply E field by PEC mask
+            amrex::MultiFab& Ex = *Efield_fp[0][0].get();
+            amrex::MultiFab& Ey = *Efield_fp[0][1].get();
+            amrex::MultiFab& Ez = *Efield_fp[0][2].get();
+            amrex::MultiFab& PECx = *PEC_fp[0][0].get();
+            amrex::MultiFab& PECy = *PEC_fp[0][1].get();
+            amrex::MultiFab& PECz = *PEC_fp[0][2].get();
+            MultiFab::Multiply(Ex, PECx, 0, 0, 1, 0);
+            MultiFab::Multiply(Ey, PECy, 0, 0, 1, 0);
+            MultiFab::Multiply(Ez, PECz, 0, 0, 1, 0);
+        }
 
         EvolveF(0.5_rt * dt[0], DtType::SecondHalf);
         EvolveG(0.5_rt * dt[0], DtType::SecondHalf);

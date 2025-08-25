@@ -707,11 +707,13 @@ PML::PML (const int lev, const BoxArray& grid_ba, const DistributionMapping& gri
         if (macroscopic_properties->m_sigma_s == "constant") {
             pml_sigma_fp->setVal(macroscopic_properties->m_sigma);
         }
-        if (macroscopic_properties->m_sigma_s == "parse_sigma_function" || macroscopic_properties->m_sigma_s == "parse_sigma_both") {
+        if (macroscopic_properties->m_sigma_s == "parse_sigma_function" ||
+            macroscopic_properties->m_sigma_s == "parse_sigma_both") {
             macroscopic_properties->InitializeMacroMultiFabUsingParser(pml_sigma_fp.get(),
                 macroscopic_properties->m_sigma_parser->compile<3>(), lev);
         }
-        if (macroscopic_properties->m_sigma_s == "parse_sigma_npy_file" || macroscopic_properties->m_sigma_s == "parse_sigma_both") {
+        if (macroscopic_properties->m_sigma_s == "parse_sigma_npy_file" ||
+            macroscopic_properties->m_sigma_s == "parse_sigma_both") {
             macroscopic_properties->InitializeMacroMultiFabFromNumpy(pml_sigma_fp.get(), macroscopic_properties->m_sigma_npy_filename, lev, macroscopic_properties->m_npy_k_index);
         }
 
@@ -879,7 +881,8 @@ PML::PML (const int lev, const BoxArray& grid_ba, const DistributionMapping& gri
             // Initialize sigma, conductivity
             if (macroscopic_properties->m_sigma_s == "constant") {
                 pml_sigma_cp->setVal(macroscopic_properties->m_sigma);
-            } else if (macroscopic_properties->m_sigma_s == "parse_sigma_function" || macroscopic_properties->m_sigma_s == "parse_sigma_both") {
+            } else if (macroscopic_properties->m_sigma_s == "parse_sigma_function" ||
+                       macroscopic_properties->m_sigma_s == "parse_sigma_both") {
                 macroscopic_properties->InitializeMacroMultiFabUsingParser(pml_sigma_cp.get(),
                     macroscopic_properties->m_sigma_parser->compile<3>(), lev);
             }

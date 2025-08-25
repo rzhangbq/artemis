@@ -46,6 +46,8 @@ MacroscopicProperties::ReadParameters ()
     pp_macroscopic.query("npy_k_index", m_npy_k_index);
     // Query input for material conductivity, sigma.
     bool sigma_specified = false;
+    bool sigma_func_specified = false;
+    bool sigma_npy_specified = false;
     if (utils::parser::queryWithParser(pp_macroscopic, "sigma", m_sigma)) {
         m_sigma_s = "constant";
         sigma_specified = true;
@@ -53,18 +55,17 @@ MacroscopicProperties::ReadParameters ()
     if (pp_macroscopic.query("sigma_function(x,y,z)", m_str_sigma_function) ) {
         m_sigma_s = "parse_sigma_function";
         sigma_specified = true;
+        sigma_func_specified = true;
     }
     if (pp_macroscopic.query("sigma_npy_file", m_sigma_npy_filename) ) {
         m_sigma_s = "parse_sigma_npy_file";
         sigma_specified = true;
+        sigma_npy_specified = true;
     }
-
-    bool sigma_func_specified = pp_macroscopic.query("sigma_function(x,y,z)", m_str_sigma_function);
-    bool sigma_npy_specified  = pp_macroscopic.query("sigma_npy_file", m_sigma_npy_filename);
     if (sigma_func_specified && sigma_npy_specified) {
+         // initialize both later in InitData
          m_sigma_s = "parse_sigma_both";
          sigma_specified = true;
-         // initialize both later in InitData
     }
 
     if (!sigma_specified) {
@@ -242,27 +243,29 @@ MacroscopicProperties::InitData ()
         m_sigma_mf->setVal(m_sigma);
 
     }
-    // Step 1: Set a default structure from a function if provided
+    // Step 1: Initialize sigma from parse (valid and ghost region)
     if (m_sigma_s == "parse_sigma_function" || m_sigma_s == "parse_sigma_both") {
         InitializeMacroMultiFabUsingParser(m_sigma_mf.get(), m_sigma_parser->compile<3>(), lev);
     }
 
-    // Step 2: Overwrite with NPY mask if provided
+    // Step 2: Overwrite with numpy mask in valid region if provided
     if (m_sigma_s == "parse_sigma_npy_file" || m_sigma_s == "parse_sigma_both") {
         InitializeMacroMultiFabFromNumpy(m_sigma_mf.get(), m_sigma_npy_filename, lev, m_npy_k_index);
     }
 
-    // PEC mask
-    amrex::MultiFab * PECx = warpx.get_pointer_PEC_fp(lev,0);
-    amrex::MultiFab * PECy = warpx.get_pointer_PEC_fp(lev,1);
-    amrex::MultiFab * PECz = warpx.get_pointer_PEC_fp(lev,2);
-
-    PECx->setVal(1.);
-    PECy->setVal(1.);
-    PECz->setVal(1.);
-
+    // FIXME move to inputs files
     bool PEC_mask = false;
+
     if (PEC_mask) {
+        // get pointer to PEC mask in WarpX class
+        amrex::MultiFab * PECx = warpx.get_pointer_PEC_fp(lev,0);
+        amrex::MultiFab * PECy = warpx.get_pointer_PEC_fp(lev,1);
+        amrex::MultiFab * PECz = warpx.get_pointer_PEC_fp(lev,2);
+
+        PECx->setVal(1.);
+        PECy->setVal(1.);
+        PECz->setVal(1.);
+
         InitializePECFromSigma(m_sigma_mf.get(), PECx, PECy, PECz, lev, m_npy_k_index);
         // no need for sigma anymore
         m_sigma_mf->setVal(0.);
@@ -494,8 +497,6 @@ MacroscopicProperties::InitializeMacroMultiFabUsingParser (
 
     }
 }
-
-
 
 void
 MacroscopicProperties::InitializeMacroMultiFabFromNumpy (
