@@ -150,7 +150,7 @@ WarpX::Evolve (int numsteps)
                 m_london->EvolveLondonJ(-0.5_rt*dt[0]); // J^(n) to J^(n-1/2) using E^(n)
                 FillBoundaryJ(guard_cells.ng_alloc_EB);
             }
-            if (warpx.use_lumped_inductor) {
+            if (use_lumped_inductor) {
                 m_inductor->EvolveInductorJ(-0.5_rt*dt[0]); // J^(n) to J^(n-1/2) using E^(n)
                 FillBoundaryJ(guard_cells.ng_alloc_EB);
             }
@@ -199,7 +199,7 @@ WarpX::Evolve (int numsteps)
         // gather fields, push particles, deposit sources, update fields
 
         // Electromagnetic case: multi-J algorithm
-        else if (do_multi_J)
+        if (do_multi_J)
         {
             OneStep_multiJ(cur_time);
         }
@@ -427,7 +427,7 @@ WarpX::OneStep_nosub (Real cur_time)
         // fill boundary here
     }
 #endif
-    if (warpx.use_lumped_inductor == 1) {
+    if (use_lumped_inductor == 1) {
         m_inductor->EvolveInductorJ(dt[0]); // J^(n-1/2) to J^(n+1/2) using E^(n)
         FillBoundaryJ(guard_cells.ng_alloc_EB);
     }
