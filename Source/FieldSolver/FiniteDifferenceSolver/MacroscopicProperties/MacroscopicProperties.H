@@ -140,7 +140,7 @@ public:
      int getmag_max_iter () {return m_mag_max_iter;}
      amrex::Real getmag_tol () {return m_mag_tol;}
 
-     // interpolate the magnetic properties to B locations
+    // interpolate the magnetic properties to B locations
      // magnetic properties are cell nodal
      // B locations are face centered
      // iv is an IntVect with a 1 in the face direction of interest, and 0 in the others

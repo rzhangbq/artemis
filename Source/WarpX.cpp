@@ -223,6 +223,7 @@ amrex::Vector<int> WarpX::field_boundary_hi(AMREX_SPACEDIM,0);
 amrex::Vector<ParticleBoundaryType> WarpX::particle_boundary_lo(AMREX_SPACEDIM,ParticleBoundaryType::Absorbing);
 amrex::Vector<ParticleBoundaryType> WarpX::particle_boundary_hi(AMREX_SPACEDIM,ParticleBoundaryType::Absorbing);
 int WarpX::yee_coupled_solver_algo;
+int WarpX::use_PEC_mask = 0;
 
 bool WarpX::do_current_centering = false;
 
@@ -1257,6 +1258,8 @@ WarpX::ReadParameters ()
         ReadExcitationParser();
 
         yee_coupled_solver_algo = GetAlgorithmInteger(pp_algo, "yee_coupled_solver");
+
+        pp_algo.query("use_PEC_mask",use_PEC_mask);
 
         // Load balancing parameters
         std::vector<std::string> load_balance_intervals_string_vec = {"0"};

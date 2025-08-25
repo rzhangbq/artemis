@@ -253,10 +253,7 @@ MacroscopicProperties::InitData ()
         InitializeMacroMultiFabFromNumpy(m_sigma_mf.get(), m_sigma_npy_filename, lev, m_npy_k_index);
     }
 
-    // FIXME move to inputs files
-    bool PEC_mask = false;
-
-    if (PEC_mask) {
+    if (warpx.use_PEC_mask) {
         // get pointer to PEC mask in WarpX class
         amrex::MultiFab * PECx = warpx.get_pointer_PEC_fp(lev,0);
         amrex::MultiFab * PECy = warpx.get_pointer_PEC_fp(lev,1);

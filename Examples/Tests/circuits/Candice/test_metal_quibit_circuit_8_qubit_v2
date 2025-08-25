@@ -35,17 +35,25 @@ algo.em_solver_medium = macroscopic
 # laxwendroff or backwardeuler
 algo.macroscopic_sigma_method = laxwendroff
 
-# macroscopic.sigma_function(x,y,z) = "sigma_0 + (sigma_si - sigma_0) * (z <= h_si)"
+##########################################
+# sigma
+
+# sigma is still parsed in the PML region
+macroscopic.sigma_function(x,y,z) = "sigma_0 + (sigma_si - sigma_0) * (z <= h_si)"
+
+# GDS file for sigma layer
 macroscopic.sigma_npy_file = "/pscratch/sd/y/ytang4/Artemis_solver_veri_gds_2d/artemis/Bin/array_3d_gds_new_large_8_qubit.npy"
+
+# k index of where to deposit conductivity from sigma npy file
 macroscopic.npy_k_index = 10
+
+# enable use of PEC mask layer from sigma in valid region
+algo.use_PEC_mask = 0
+
+##########################################
 
 macroscopic.epsilon_function(x,y,z) = "eps_0 + eps_0 * (eps_r_si - 1.) * (z <= h_si)"
 
-# lines 1-4:   qubit control
-# lines 5-9:   readout resonator
-# lines 9-13:  capacitor
-# lines 14-18: entrance to meanding line
-# lines 19-68: meandering line
 macroscopic.mu_function(x,y,z) = "mu_0 + mu_0 * (mu_r_si - 1.) * (z <= h_si)"
  
 #################################

@@ -539,9 +539,7 @@ WarpX::OneStep_nosub (Real cur_time)
             ApplyExternalFieldExcitationOnGrid(ExternalFieldType::EfieldExternalPML);
         }
 
-        // FIXME move to inputs files
-        bool PEC_mask = false;
-        if (PEC_mask) {
+        if (use_PEC_mask) {
             // multiply E field by PEC mask
             amrex::MultiFab& Ex = *Efield_fp[0][0].get();
             amrex::MultiFab& Ey = *Efield_fp[0][1].get();
