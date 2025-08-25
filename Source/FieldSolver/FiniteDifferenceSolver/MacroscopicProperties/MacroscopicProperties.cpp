@@ -2,6 +2,7 @@
 
 #include "Utils/Parser/ParserUtils.H"
 #include "Utils/TextMsg.H"
+#include "Utils/cnpy.h"
 #include "WarpX.H"
 
 #include <ablastr/warn_manager/WarnManager.H>
@@ -41,9 +42,12 @@ MacroscopicProperties::ReadParameters ()
     // The vacuum values are used as default for the macroscopic parameters
     // with a warning message to the user to indicate that no value was specified.
 
-
+    // Query mask index
+    pp_macroscopic.query("npy_k_index", m_npy_k_index);
     // Query input for material conductivity, sigma.
     bool sigma_specified = false;
+    bool sigma_func_specified = false;
+    bool sigma_npy_specified = false;
     if (utils::parser::queryWithParser(pp_macroscopic, "sigma", m_sigma)) {
         m_sigma_s = "constant";
         sigma_specified = true;
@@ -51,7 +55,19 @@ MacroscopicProperties::ReadParameters ()
     if (pp_macroscopic.query("sigma_function(x,y,z)", m_str_sigma_function) ) {
         m_sigma_s = "parse_sigma_function";
         sigma_specified = true;
+        sigma_func_specified = true;
     }
+    if (pp_macroscopic.query("sigma_npy_file", m_sigma_npy_filename) ) {
+        m_sigma_s = "parse_sigma_npy_file";
+        sigma_specified = true;
+        sigma_npy_specified = true;
+    }
+    if (sigma_func_specified && sigma_npy_specified) {
+         // initialize both later in InitData
+         m_sigma_s = "parse_sigma_both";
+         sigma_specified = true;
+    }
+
     if (!sigma_specified) {
         std::stringstream warnMsg;
         warnMsg << "Material conductivity is not specified. Using default vacuum value of " <<
@@ -60,7 +76,7 @@ MacroscopicProperties::ReadParameters ()
             warnMsg.str());
     }
     // initialization of sigma (conductivity) with parser
-    if (m_sigma_s == "parse_sigma_function") {
+    if (m_sigma_s == "parse_sigma_function" || m_sigma_s == "parse_sigma_both") {
         utils::parser::Store_parserString(
             pp_macroscopic, "sigma_function(x,y,z)", m_str_sigma_function);
         m_sigma_parser = std::make_unique<amrex::Parser>(
@@ -74,6 +90,10 @@ MacroscopicProperties::ReadParameters ()
     }
     if (pp_macroscopic.query("epsilon_function(x,y,z)", m_str_epsilon_function) ) {
         m_epsilon_s = "parse_epsilon_function";
+        epsilon_specified = true;
+    }
+    if (pp_macroscopic.query("epsilon_npy_file", m_epsilon_npy_filename) ) {
+        m_epsilon_s = "parse_epsilon_npy_file";
         epsilon_specified = true;
     }
     if (!epsilon_specified) {
@@ -100,6 +120,10 @@ MacroscopicProperties::ReadParameters ()
     }
     if (pp_macroscopic.query("mu_function(x,y,z)", m_str_mu_function) ) {
         m_mu_s = "parse_mu_function";
+        mu_specified = true;
+    }
+    if (pp_macroscopic.query("mu_npy_file", m_mu_npy_filename) ) {
+        m_mu_s = "parse_mu_npy_file";
         mu_specified = true;
     }
     if (!mu_specified) {
@@ -218,10 +242,32 @@ MacroscopicProperties::InitData ()
 
         m_sigma_mf->setVal(m_sigma);
 
-    } else if (m_sigma_s == "parse_sigma_function") {
-
+    }
+    // Step 1: Initialize sigma from parse (valid and ghost region)
+    if (m_sigma_s == "parse_sigma_function" || m_sigma_s == "parse_sigma_both") {
         InitializeMacroMultiFabUsingParser(m_sigma_mf.get(), m_sigma_parser->compile<3>(), lev);
     }
+
+    // Step 2: Overwrite with numpy mask in valid region if provided
+    if (m_sigma_s == "parse_sigma_npy_file" || m_sigma_s == "parse_sigma_both") {
+        InitializeMacroMultiFabFromNumpy(m_sigma_mf.get(), m_sigma_npy_filename, lev, m_npy_k_index);
+    }
+
+    if (warpx.use_PEC_mask) {
+        // get pointer to PEC mask in WarpX class
+        amrex::MultiFab * PECx = warpx.get_pointer_PEC_fp(lev,0);
+        amrex::MultiFab * PECy = warpx.get_pointer_PEC_fp(lev,1);
+        amrex::MultiFab * PECz = warpx.get_pointer_PEC_fp(lev,2);
+
+        PECx->setVal(1.);
+        PECy->setVal(1.);
+        PECz->setVal(1.);
+
+        InitializePECFromSigma(m_sigma_mf.get(), PECx, PECy, PECz, lev, m_npy_k_index);
+        // no need for sigma anymore
+        m_sigma_mf->setVal(0.);
+    }
+    
     // Initialize epsilon
     if (m_epsilon_s == "constant") {
 
@@ -231,6 +277,8 @@ MacroscopicProperties::InitData ()
 
         InitializeMacroMultiFabUsingParser(m_eps_mf.get(), m_epsilon_parser->compile<3>(), lev);
 
+    } else if (m_epsilon_s == "parse_epsilon_npy_file"){
+        InitializeMacroMultiFabFromNumpy(m_eps_mf.get(), m_epsilon_npy_filename, lev, m_npy_k_index);
     }
 
     // Initialize mu
@@ -242,6 +290,8 @@ MacroscopicProperties::InitData ()
 
         InitializeMacroMultiFabUsingParser(m_mu_mf.get(), m_mu_parser->compile<3>(), lev);
 
+    } else if (m_mu_s == "parse_mu_npy_file"){
+        InitializeMacroMultiFabFromNumpy(m_mu_mf.get(), m_mu_npy_filename, lev, m_npy_k_index);
     }
 #ifdef WARPX_MAG_LLG
 
@@ -442,5 +492,144 @@ MacroscopicProperties::InitializeMacroMultiFabUsingParser (
                 macro_fab(i,j,k) = macro_parser(x,y,z);
         });
 
+    }
+}
+
+void
+MacroscopicProperties::InitializeMacroMultiFabFromNumpy (
+    amrex::MultiFab* macro_mf,
+    const std::string& npy_filename,
+    const int lev,
+    const int m_npy_k_index_in)
+{
+
+    // Load numpy array
+    cnpy::NpyArray arr = cnpy::npy_load(npy_filename);
+    amrex::Print() << "Loaded numpy array: " << npy_filename << "\n";
+
+    // Check expected dimensions (assume 3D)
+    if (arr.shape.size() != 3) {
+        amrex::Abort("Expected a 3D numpy array for initialization.");
+    }
+
+    const size_t nx = arr.shape[0];
+    const size_t ny = arr.shape[1];
+    const size_t nz = arr.shape[2];
+
+    // Validate array size against domain
+    WarpX& warpx = WarpX::GetInstance();
+    const amrex::Box domain_box = warpx.Geom(lev).Domain();
+    const amrex::IntVect dom_size = domain_box.size();
+
+    // if (dom_size[0] != static_cast<int>(nx) ||
+    //     dom_size[1] != static_cast<int>(ny) ||
+    //     dom_size[2] != static_cast<int>(nz)) {
+    //     amrex::Abort("Mismatch between numpy array shape and simulation domain size!");
+    // }
+
+    if (dom_size[0] != static_cast<int>(nx) ||
+        dom_size[1] != static_cast<int>(ny)) {
+        amrex::Abort("Mismatch between numpy array shape and simulation domain size!");
+    }
+
+
+    // const double* data = arr.data<double>();
+    const double* data = arr.data<double>();
+    std::size_t total_size = nx * ny * nz;
+
+    // Convert to amrex::Real on host
+    std::vector<amrex::Real> host_data(total_size);
+    for (std::size_t i = 0; i < total_size; ++i) {
+        host_data[i] = static_cast<amrex::Real>(data[i]);
+    }
+
+    // Copy to device
+    amrex::Gpu::DeviceVector<amrex::Real> data_dev;
+    data_dev.resize(total_size);
+    amrex::Gpu::copy(amrex::Gpu::hostToDevice, host_data.begin(), host_data.end(), data_dev.begin());
+    const amrex::Real* dptr = data_dev.data();
+
+    amrex::IntVect iv = macro_mf->ixType().toIntVect();
+
+    for (MFIter mfi(*macro_mf); mfi.isValid(); ++mfi) {
+        // we need to loop over ghost cells since the PML algorithm creates temporary grids with valid
+        // and ghost regions; some may lay on the interior domain and some may lie outside the domain
+        const Box& bx = mfi.tilebox( iv, macro_mf->nGrowVect());
+
+        /*
+        if (mfi.index() == 0) {
+            const auto lo = bx.smallEnd();
+            const auto hi = bx.bigEnd();
+            const auto size = bx.size();
+
+            amrex::Print() << "fab shape: ["
+                           << size[0] << ", "
+                           << size[1] << ", "
+                           << size[2] << "], index range: ["
+                           << lo[0] << ":" << hi[0] << ", "
+                           << lo[1] << ":" << hi[1] << ", "
+                           << lo[2] << ":" << hi[2] << "]\n";
+        }
+        */
+
+        Array4<amrex::Real> fab = macro_mf->array(mfi);
+
+        ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+
+            // only overwrite macro value from the gds file if you are in the valid region
+            if (i >= 0 && j >= 0 && k >= 0 && i < dom_size[0] && j < dom_size[1] && k < dom_size[2]) {
+                if (k == m_npy_k_index_in) {
+                    size_t idx2d = i * ny + j;  // equivalent to i*ny*nz + j*nz + 0 when nz=1
+                    fab(i, j, k) = dptr[idx2d];
+                }
+            }
+
+        });
+    }
+    amrex::Gpu::streamSynchronize();
+}
+
+void
+MacroscopicProperties::InitializePECFromSigma (amrex::MultiFab* sigma_mf,
+                                               amrex::MultiFab* PECx,
+                                               amrex::MultiFab* PECy,
+                                               amrex::MultiFab* PECz,
+                                               const int lev,
+                                               const int m_npy_k_index_in)
+{
+    // PEC for Ex is on yz edges
+    for (MFIter mfi(*PECx); mfi.isValid(); ++mfi) {
+        const Box& bx = mfi.tilebox();
+
+        Array4<amrex::Real> sigma = sigma_mf->array(mfi);
+        Array4<amrex::Real> Px = PECx->array(mfi);
+        
+        ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+
+            if (k == m_npy_k_index_in) {
+                if (sigma(i,j,k) != 0. || sigma(i,j-1,k) != 0) {
+                    Px(i,j,k) = 0.;
+                }
+            }
+
+        });
+    }
+
+    // PEC for Ey is on xz edges
+    for (MFIter mfi(*PECy); mfi.isValid(); ++mfi) {
+        const Box& bx = mfi.tilebox();
+
+        Array4<amrex::Real> sigma = sigma_mf->array(mfi);
+        Array4<amrex::Real> Py = PECy->array(mfi);
+        
+        ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+
+            if (k == m_npy_k_index_in) {
+                if (sigma(i,j,k) != 0. || sigma(i-1,j,k) != 0) {
+                    Py(i,j,k) = 0.;
+                }
+            }
+
+        });
     }
 }
