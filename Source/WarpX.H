@@ -317,9 +317,9 @@ public:
      */
     static amrex::Vector<ParticleBoundaryType> particle_boundary_hi;
     static int yee_coupled_solver_algo;
-    static int lumped_inductor_algo;
 
     static int use_PEC_mask;
+    static int use_lumped_inductor;
     
     //! Integer that corresponds to the order of the PSATD solution
     //! (whether the PSATD equations are derived from first-order or

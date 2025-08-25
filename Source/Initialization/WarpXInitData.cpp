@@ -426,7 +426,7 @@ WarpX::InitData ()
         m_london->InitData();
     }
 
-    if (WarpX::lumped_inductor_algo == LumpedInductor::On) {
+    if (use_lumped_inductor) {
         amrex::Print() << " calling inductor \n";
         m_inductor->InitData();
     }
