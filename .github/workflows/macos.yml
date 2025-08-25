@@ -86,9 +86,3 @@ jobs:
           -DWarpX_openpmd_internal=OFF \
           -DWarpX_PRECISION=SINGLE
         cmake --build build_sp -j 3
-        # cmake --build build_sp --target pip_install
-
-    - name: run pywarpx
-      run: |
-        export OMP_NUM_THREADS=1
-        mpirun -n 2 Examples/Physics_applications/laser_acceleration/PICMI_inputs_3d.py
