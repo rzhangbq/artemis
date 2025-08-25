@@ -154,7 +154,7 @@ public:
         if (search == particle_icomps.end()) {
             particle_icomps[name] = NumIntComps();
             particle_runtime_icomps[name] = NumIntComps() - 0;
-            ParticleContainer::AddIntComp(communicate);
+            this->AddIntComp(communicate);
         } else {
             amrex::Print() << Utils::TextMsg::Info(
                 name + " already exists in particle_icomps, not adding.");
