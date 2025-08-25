@@ -426,6 +426,11 @@ WarpX::InitData ()
         m_london->InitData();
     }
 
+    if (WarpX::lumped_inductor_algo == LumpedInductor::On) {
+        amrex::Print() << " calling inductor \n";
+        m_inductor->InitData();
+    }
+
     if (ParallelDescriptor::IOProcessor()) {
         std::cout << "\nGrids Summary:\n";
         printGridSummary(std::cout, 0, finestLevel());
