@@ -710,27 +710,56 @@ PML::PML (const int lev, const BoxArray& grid_ba, const DistributionMapping& gri
         if (macroscopic_properties->m_sigma_s == "parse_sigma_function" ||
             macroscopic_properties->m_sigma_s == "parse_sigma_both") {
             macroscopic_properties->InitializeMacroMultiFabUsingParser(pml_sigma_fp.get(),
-                macroscopic_properties->m_sigma_parser->compile<3>(), lev);
+                                                                       macroscopic_properties->m_sigma_parser->compile<3>(),
+                                                                       lev);
         }
         if (macroscopic_properties->m_sigma_s == "parse_sigma_npy_file" ||
             macroscopic_properties->m_sigma_s == "parse_sigma_both") {
-            macroscopic_properties->InitializeMacroMultiFabFromNumpy(pml_sigma_fp.get(), macroscopic_properties->m_sigma_npy_filename, lev, macroscopic_properties->m_npy_k_index);
+            macroscopic_properties->InitializeMacroMultiFabFromNumpy(pml_sigma_fp.get(),
+                                                                     macroscopic_properties->m_sigma_npy_filename,
+                                                                     lev,
+                                                                     macroscopic_properties->m_npy_k_index,
+                                                                     macroscopic_properties->m_sigma_npy_value);
         }
 
         // Initialize epsilon, permittivity
         if (macroscopic_properties->m_epsilon_s == "constant") {
             pml_eps_fp->setVal(macroscopic_properties->m_epsilon);
-        } else if (macroscopic_properties->m_epsilon_s == "parse_epsilon_function") {
+        }
+
+        if (macroscopic_properties->m_epsilon_s == "parse_epsilon_function" ||
+            macroscopic_properties->m_epsilon_s == "parse_epsilon_both") {
             macroscopic_properties->InitializeMacroMultiFabUsingParser(pml_eps_fp.get(),
-                macroscopic_properties->m_epsilon_parser->compile<3>(), lev);
+                                                                       macroscopic_properties->m_epsilon_parser->compile<3>(),
+                                                                       lev);
+        }
+        if (macroscopic_properties->m_epsilon_s == "parse_epsilon_npy_file" ||
+            macroscopic_properties->m_epsilon_s == "parse_epsilon_both") {
+            macroscopic_properties->InitializeMacroMultiFabFromNumpy(pml_eps_fp.get(),
+                                                                     macroscopic_properties->m_epsilon_npy_filename,
+                                                                     lev,
+                                                                     macroscopic_properties->m_npy_k_index,
+                                                                     macroscopic_properties->m_epsilon_npy_value);
         }
 
         // Initialize mu, permeability
         if (macroscopic_properties->m_mu_s == "constant") {
             pml_mu_fp->setVal(macroscopic_properties->m_mu);
-        } else if (macroscopic_properties->m_mu_s == "parse_mu_function") {
+        }
+
+        if (macroscopic_properties->m_mu_s == "parse_mu_function" ||
+            macroscopic_properties->m_mu_s == "parse_mu_both") {
             macroscopic_properties->InitializeMacroMultiFabUsingParser(pml_mu_fp.get(),
-                macroscopic_properties->m_mu_parser->compile<3>(), lev);
+                                                                       macroscopic_properties->m_mu_parser->compile<3>(),
+                                                                       lev);
+        }
+        if (macroscopic_properties->m_mu_s == "parse_mu_npy_file" ||
+            macroscopic_properties->m_mu_s == "parse_mu_both") {
+            macroscopic_properties->InitializeMacroMultiFabFromNumpy(pml_mu_fp.get(),
+                                                                     macroscopic_properties->m_mu_npy_filename,
+                                                                     lev,
+                                                                     macroscopic_properties->m_npy_k_index,
+                                                                     macroscopic_properties->m_mu_npy_value);
         }
 
     }

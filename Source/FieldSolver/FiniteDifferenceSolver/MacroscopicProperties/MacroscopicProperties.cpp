@@ -44,7 +44,9 @@ MacroscopicProperties::ReadParameters ()
 
     // Query mask index
     pp_macroscopic.query("npy_k_index", m_npy_k_index);
+
     // Query input for material conductivity, sigma.
+    pp_macroscopic.query("sigma_npy_value", m_sigma_npy_value);
     bool sigma_specified = false;
     bool sigma_func_specified = false;
     bool sigma_npy_specified = false;
@@ -67,13 +69,11 @@ MacroscopicProperties::ReadParameters ()
          m_sigma_s = "parse_sigma_both";
          sigma_specified = true;
     }
-
     if (!sigma_specified) {
         std::stringstream warnMsg;
-        warnMsg << "Material conductivity is not specified. Using default vacuum value of " <<
-            m_sigma << " in the simulation.";
-        ablastr::warn_manager::WMRecordWarning("Macroscopic properties",
-            warnMsg.str());
+        warnMsg << "Material conductivity is not specified. Using default vacuum value of "
+                << m_sigma << " in the simulation.";
+        ablastr::warn_manager::WMRecordWarning("Macroscopic properties", warnMsg.str());
     }
     // initialization of sigma (conductivity) with parser
     if (m_sigma_s == "parse_sigma_function" || m_sigma_s == "parse_sigma_both") {
@@ -83,7 +83,11 @@ MacroscopicProperties::ReadParameters ()
             utils::parser::makeParser(m_str_sigma_function,{"x","y","z"}));
     }
 
+    // Query input for material permittivity, epsilon
+    pp_macroscopic.query("epsilon_npy_value", m_epsilon_npy_value);
     bool epsilon_specified = false;
+    bool epsilon_func_specified = false;
+    bool epsilon_npy_specified = false;
     if (utils::parser::queryWithParser(pp_macroscopic, "epsilon", m_epsilon)) {
         m_epsilon_s = "constant";
         epsilon_specified = true;
@@ -91,21 +95,26 @@ MacroscopicProperties::ReadParameters ()
     if (pp_macroscopic.query("epsilon_function(x,y,z)", m_str_epsilon_function) ) {
         m_epsilon_s = "parse_epsilon_function";
         epsilon_specified = true;
+        epsilon_func_specified = true;
     }
     if (pp_macroscopic.query("epsilon_npy_file", m_epsilon_npy_filename) ) {
         m_epsilon_s = "parse_epsilon_npy_file";
         epsilon_specified = true;
+        epsilon_npy_specified = true;
+    }
+    if (epsilon_func_specified && epsilon_npy_specified) {
+         // initialize both later in InitData
+         m_epsilon_s = "parse_epsilon_both";
+         epsilon_specified = true;
     }
     if (!epsilon_specified) {
         std::stringstream warnMsg;
-        warnMsg << "Material permittivity is not specified. Using default vacuum value of " <<
-            m_epsilon << " in the simulation.";
-        ablastr::warn_manager::WMRecordWarning("Macroscopic properties",
-            warnMsg.str());
+        warnMsg << "Material conductivity is not specified. Using default vacuum value of "
+                << m_epsilon << " in the simulation.";
+        ablastr::warn_manager::WMRecordWarning("Macroscopic properties", warnMsg.str());
     }
-
     // initialization of epsilon (permittivity) with parser
-    if (m_epsilon_s == "parse_epsilon_function") {
+    if (m_epsilon_s == "parse_epsilon_function" || m_epsilon_s == "parse_epsilon_both") {
         utils::parser::Store_parserString(
             pp_macroscopic, "epsilon_function(x,y,z)", m_str_epsilon_function);
         m_epsilon_parser = std::make_unique<amrex::Parser>(
@@ -113,7 +122,10 @@ MacroscopicProperties::ReadParameters ()
     }
 
     // Query input for material permeability, mu
+    pp_macroscopic.query("mu_npy_value", m_mu_npy_value);
     bool mu_specified = false;
+    bool mu_func_specified = false;
+    bool mu_npy_specified = false;
     if (utils::parser::queryWithParser(pp_macroscopic, "mu", m_mu)) {
         m_mu_s = "constant";
         mu_specified = true;
@@ -121,21 +133,26 @@ MacroscopicProperties::ReadParameters ()
     if (pp_macroscopic.query("mu_function(x,y,z)", m_str_mu_function) ) {
         m_mu_s = "parse_mu_function";
         mu_specified = true;
+        mu_func_specified = true;
     }
     if (pp_macroscopic.query("mu_npy_file", m_mu_npy_filename) ) {
         m_mu_s = "parse_mu_npy_file";
         mu_specified = true;
+        mu_npy_specified = true;
+    }
+    if (mu_func_specified && mu_npy_specified) {
+         // initialize both later in InitData
+         m_mu_s = "parse_mu_both";
+         mu_specified = true;
     }
     if (!mu_specified) {
         std::stringstream warnMsg;
-        warnMsg << "Material permittivity is not specified. Using default vacuum value of " <<
-            m_mu << " in the simulation.";
-        ablastr::warn_manager::WMRecordWarning("Macroscopic properties",
-            warnMsg.str());
+        warnMsg << "Material conductivity is not specified. Using default vacuum value of "
+                << m_mu << " in the simulation.";
+        ablastr::warn_manager::WMRecordWarning("Macroscopic properties", warnMsg.str());
     }
-
     // initialization of mu (permeability) with parser
-    if (m_mu_s == "parse_mu_function") {
+    if (m_mu_s == "parse_mu_function" || m_mu_s == "parse_mu_both") {
         utils::parser::Store_parserString(
             pp_macroscopic, "mu_function(x,y,z)", m_str_mu_function);
         m_mu_parser = std::make_unique<amrex::Parser>(
@@ -237,6 +254,7 @@ MacroscopicProperties::InitData ()
     // mu is cell-centered MultiFab
     m_mu_mf = std::make_unique<amrex::MultiFab>(ba, dmap, 1, ng_EB_alloc);
 
+    ////////////////////////
     // Initialize sigma
     if (m_sigma_s == "constant") {
 
@@ -250,7 +268,7 @@ MacroscopicProperties::InitData ()
 
     // Step 2: Overwrite with numpy mask in valid region if provided
     if (m_sigma_s == "parse_sigma_npy_file" || m_sigma_s == "parse_sigma_both") {
-        InitializeMacroMultiFabFromNumpy(m_sigma_mf.get(), m_sigma_npy_filename, lev, m_npy_k_index);
+        InitializeMacroMultiFabFromNumpy(m_sigma_mf.get(), m_sigma_npy_filename, lev, m_npy_k_index, m_sigma_npy_value);
     }
 
     if (warpx.use_PEC_mask) {
@@ -267,32 +285,41 @@ MacroscopicProperties::InitData ()
         // no need for sigma anymore
         m_sigma_mf->setVal(0.);
     }
-    
+
+    ////////////////////////
     // Initialize epsilon
     if (m_epsilon_s == "constant") {
 
         m_eps_mf->setVal(m_epsilon);
 
-    } else if (m_epsilon_s == "parse_epsilon_function") {
-
+    }
+    // Step 1: Initialize epsilon from parse (valid and ghost region)
+    if (m_epsilon_s == "parse_epsilon_function" || m_epsilon_s == "parse_epsilon_both") {
         InitializeMacroMultiFabUsingParser(m_eps_mf.get(), m_epsilon_parser->compile<3>(), lev);
-
-    } else if (m_epsilon_s == "parse_epsilon_npy_file"){
-        InitializeMacroMultiFabFromNumpy(m_eps_mf.get(), m_epsilon_npy_filename, lev, m_npy_k_index);
     }
 
+    // Step 2: Overwrite with numpy mask in valid region if provided
+    if (m_epsilon_s == "parse_epsilon_npy_file" || m_epsilon_s == "parse_epsilon_both") {
+        InitializeMacroMultiFabFromNumpy(m_eps_mf.get(), m_epsilon_npy_filename, lev, m_npy_k_index, m_epsilon_npy_value);
+    }
+
+    ////////////////////////
     // Initialize mu
     if (m_mu_s == "constant") {
 
         m_mu_mf->setVal(m_mu);
 
-    } else if (m_mu_s == "parse_mu_function") {
-
-        InitializeMacroMultiFabUsingParser(m_mu_mf.get(), m_mu_parser->compile<3>(), lev);
-
-    } else if (m_mu_s == "parse_mu_npy_file"){
-        InitializeMacroMultiFabFromNumpy(m_mu_mf.get(), m_mu_npy_filename, lev, m_npy_k_index);
     }
+    // Step 1: Initialize mu from parse (valid and ghost region)
+    if (m_mu_s == "parse_mu_function" || m_mu_s == "parse_mu_both") {
+        InitializeMacroMultiFabUsingParser(m_mu_mf.get(), m_mu_parser->compile<3>(), lev);
+    }
+
+    // Step 2: Overwrite with numpy mask in valid region if provided
+    if (m_mu_s == "parse_mu_npy_file" || m_mu_s == "parse_mu_both") {
+        InitializeMacroMultiFabFromNumpy(m_mu_mf.get(), m_mu_npy_filename, lev, m_npy_k_index, m_mu_npy_value);
+    }
+
 #ifdef WARPX_MAG_LLG
 
     // all magnetic macroparameters are stored on faces
@@ -500,7 +527,8 @@ MacroscopicProperties::InitializeMacroMultiFabFromNumpy (
     amrex::MultiFab* macro_mf,
     const std::string& npy_filename,
     const int lev,
-    const int m_npy_k_index_in)
+    const int npy_k_index,
+    const amrex::Real npy_value)
 {
 
     // Load numpy array
@@ -578,9 +606,11 @@ MacroscopicProperties::InitializeMacroMultiFabFromNumpy (
 
             // only overwrite macro value from the gds file if you are in the valid region
             if (i >= 0 && j >= 0 && k >= 0 && i < dom_size[0] && j < dom_size[1] && k < dom_size[2]) {
-                if (k == m_npy_k_index_in) {
+                if (k == npy_k_index) {
                     size_t idx2d = i * ny + j;  // equivalent to i*ny*nz + j*nz + 0 when nz=1
-                    fab(i, j, k) = dptr[idx2d];
+                    if (dptr[idx2d] == 1) {
+                        fab(i, j, k) = npy_value;
+                    }
                 }
             }
 
@@ -595,7 +625,7 @@ MacroscopicProperties::InitializePECFromSigma (amrex::MultiFab* sigma_mf,
                                                amrex::MultiFab* PECy,
                                                amrex::MultiFab* PECz,
                                                const int lev,
-                                               const int m_npy_k_index_in)
+                                               const int npy_k_index)
 {
     // PEC for Ex is on yz edges
     for (MFIter mfi(*PECx); mfi.isValid(); ++mfi) {
@@ -606,7 +636,7 @@ MacroscopicProperties::InitializePECFromSigma (amrex::MultiFab* sigma_mf,
         
         ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 
-            if (k == m_npy_k_index_in) {
+            if (k == npy_k_index) {
                 if (sigma(i,j,k) != 0. || sigma(i,j-1,k) != 0) {
                     Px(i,j,k) = 0.;
                 }
@@ -624,7 +654,7 @@ MacroscopicProperties::InitializePECFromSigma (amrex::MultiFab* sigma_mf,
         
         ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 
-            if (k == m_npy_k_index_in) {
+            if (k == npy_k_index) {
                 if (sigma(i,j,k) != 0. || sigma(i-1,j,k) != 0) {
                     Py(i,j,k) = 0.;
                 }

@@ -53,20 +53,21 @@ public:
       *  with user-defined functions(x,y,z).
       */
      void InitializeMacroMultiFabUsingParser (amrex::MultiFab *macro_mf,
-                                  amrex::ParserExecutor<3> const& macro_parser,
-                                  const int lev);
+                                              amrex::ParserExecutor<3> const& macro_parser,
+                                              const int lev);
 
     void InitializeMacroMultiFabFromNumpy (amrex::MultiFab* macro_mf,
-                                  const std::string& npy_filename,
-                                  const int lev,
-                                  const int m_npy_k_index_in);
+                                           const std::string& npy_filename,
+                                           const int lev,
+                                           const int npy_k_index,
+                                           const amrex::Real npy_value);
     
     void InitializePECFromSigma (amrex::MultiFab* sigma_mf,
                                  amrex::MultiFab* PECx,
                                  amrex::MultiFab* PECy,
                                  amrex::MultiFab* PECz,
                                  const int lev,
-                                 const int m_npy_k_index_in);
+                                 const int npy_k_index);
 
     /** Gpu Vector with index type of the conductivity multifab */
      amrex::GpuArray<int, 3> sigma_IndexType;
@@ -101,9 +102,14 @@ public:
      amrex::Real m_mu = PhysConst::mu0;
      /** index to insert the mask */
      int m_npy_k_index = 0;
+     /** numpy arrays for layer */
      std::string m_sigma_npy_filename;
      std::string m_epsilon_npy_filename;
      std::string m_mu_npy_filename;
+     /** numerical value of sigma, epsilon, and mu for gds numpy array layer */
+     amrex::Real m_sigma_npy_value = 0.;
+     amrex::Real m_epsilon_npy_value = 0.;
+     amrex::Real m_mu_npy_value = 0.;
      /** Parser Wrappers */
      std::unique_ptr<amrex::Parser> m_sigma_parser;
      std::unique_ptr<amrex::Parser> m_epsilon_parser;
