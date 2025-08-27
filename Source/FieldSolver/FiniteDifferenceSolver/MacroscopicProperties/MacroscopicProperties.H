@@ -67,7 +67,8 @@ public:
                                  amrex::MultiFab* PECy,
                                  amrex::MultiFab* PECz,
                                  const int lev,
-                                 const int npy_k_index);
+                                 const int npy_k_index,
+                                 const amrex::Geometry& geom);
 
     /** Gpu Vector with index type of the conductivity multifab */
      amrex::GpuArray<int, 3> sigma_IndexType;
