@@ -607,19 +607,25 @@ MacroscopicProperties::InitializeMacroMultiFabFromNumpy (
             int idx2d;
             // only overwrite macro value from the gds file if you are in the valid region
             if (k == npy_k_index) {
-                
-                if (i < 0 && j >=0 && j < dom_size[1]) {
+
+                if (i < 0 && j >= 0 && j < dom_size[1]) {
+                    // left edge PML
                     idx2d = 0 * ny + j;
-                } else if (i >= dom_size[0] && j >=0 && j < dom_size[1]) {
+                } else if (i >= dom_size[0] && j >= 0 && j < dom_size[1]) {
+                    // right edge PML
                     idx2d = (dom_size[0]-1) * ny + j;
                 } else if (i >= 0 && i < dom_size[0] && j < 0) {
+                    // bottom edge PML
                     idx2d = i * ny + 0;
                 } else if (i >= 0 && i < dom_size[0] && j >= dom_size[1]) {
+                    // top edge PML
                     idx2d = i * ny + (dom_size[1]-1);
                 } else {
+                    // valid region PML
                     idx2d = i * ny + j;
                 }
 
+                // if the mask value is 1, set macroscopic value to npy_value
                 if (dptr[idx2d] == 1) {
                     fab(i, j, k) = npy_value;
                 }
