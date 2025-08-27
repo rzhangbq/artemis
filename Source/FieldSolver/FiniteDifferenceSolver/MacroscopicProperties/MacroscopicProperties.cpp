@@ -281,7 +281,7 @@ MacroscopicProperties::InitData ()
         PECy->setVal(1.);
         PECz->setVal(1.);
 
-        InitializePECFromSigma(m_sigma_mf.get(), PECx, PECy, PECz, lev, m_npy_k_index, warpx.Geom(lev));
+        InitializePECFromSigma(m_sigma_mf.get(), PECx, PECy, lev, m_npy_k_index, warpx.Geom(lev));
         // no need for sigma anymore
         m_sigma_mf->setVal(0.);
     }
@@ -640,7 +640,6 @@ void
 MacroscopicProperties::InitializePECFromSigma (amrex::MultiFab* sigma_mf,
                                                amrex::MultiFab* PECx,
                                                amrex::MultiFab* PECy,
-                                               amrex::MultiFab* PECz,
                                                const int lev,
                                                const int npy_k_index,
                                                const amrex::Geometry& geom)
