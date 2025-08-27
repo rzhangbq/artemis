@@ -281,7 +281,7 @@ MacroscopicProperties::InitData ()
         PECy->setVal(1.);
         PECz->setVal(1.);
 
-        InitializePECFromSigma(m_sigma_mf.get(), PECx, PECy, lev, m_npy_k_index);
+        InitializePECFromSigma(m_sigma_mf.get(), PECx, PECy, m_npy_k_index);
         // no need for sigma anymore
         m_sigma_mf->setVal(0.);
     }
@@ -623,7 +623,6 @@ void
 MacroscopicProperties::InitializePECFromSigma (amrex::MultiFab* sigma_mf,
                                                amrex::MultiFab* PECx,
                                                amrex::MultiFab* PECy,
-                                               const int lev,
                                                const int npy_k_index)
 {
     // PEC for Ex is on yz edges
