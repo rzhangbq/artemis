@@ -65,9 +65,7 @@ public:
     void InitializePECFromSigma (amrex::MultiFab* sigma_mf,
                                  amrex::MultiFab* PECx,
                                  amrex::MultiFab* PECy,
-                                 const int lev,
-                                 const int npy_k_index,
-                                 const amrex::Geometry& geom);
+                                 const int npy_k_index);
 
     /** Gpu Vector with index type of the conductivity multifab */
      amrex::GpuArray<int, 3> sigma_IndexType;
