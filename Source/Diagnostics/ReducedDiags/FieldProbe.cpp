@@ -434,8 +434,6 @@ void FieldProbe::ComputeDiags (int step)
         {
             const auto getPosition = GetParticlePosition(pti);
             auto setPosition = SetParticlePosition(pti);
-            const auto& aos = pti.GetArrayOfStructs();
-            const auto* AMREX_RESTRICT m_structs = aos().dataPtr();
 
             auto const np = pti.numParticles();
             if (update_particles_moving_window)
