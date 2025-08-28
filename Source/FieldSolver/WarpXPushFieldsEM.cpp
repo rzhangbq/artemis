@@ -1125,6 +1125,21 @@ WarpX::MacroscopicEvolveE (int lev, PatchType patch_type, amrex::Real a_dt) {
                 pml[lev]->Getmu_cp(),
                 pml[lev]->Getsigma_cp() );
         }
+
+        if (use_PEC_mask) {
+            amrex::MultiFab* Ex_PEC = pml[lev]->GetE_fp(0);
+            amrex::MultiFab* Ey_PEC = pml[lev]->GetE_fp(1);
+            amrex::MultiFab* Ez_PEC = pml[lev]->GetE_fp(2);
+            amrex::MultiFab* PECx_PEC = pml[lev]->GetPEC_fp(0);
+            amrex::MultiFab* PECy_PEC = pml[lev]->GetPEC_fp(1);
+            amrex::MultiFab* PECz_PEC = pml[lev]->GetPEC_fp(2);
+
+            // 0 ghost cells or nge?
+            MultiFab::Multiply(*Ex_PEC, *PECx_PEC, 0, 0, 2, 0);
+            MultiFab::Multiply(*Ey_PEC, *PECy_PEC, 0, 0, 2, 0);
+            MultiFab::Multiply(*Ez_PEC, *PECz_PEC, 0, 0, 2, 0);
+        }
+
     }
 
     ApplyEfieldBoundary(lev, patch_type);

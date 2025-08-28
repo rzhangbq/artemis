@@ -730,10 +730,8 @@ PML::PML (const int lev, const BoxArray& grid_ba, const DistributionMapping& gri
             pml_PEC_fp[1]->setVal(1.);
             pml_PEC_fp[2]->setVal(1.);
 
-            /*
-            MacroscopicProperties::InitializePECFromSigma(pml_sigma_fp.get(), pml_PEC_fp[0], pml_PEC_fp[1], pml_PEC_fp[2],
-                                                          lev, macroscopic_properties->m_npy_k_index, *geom));
-            */
+            macroscopic_properties->InitializePECFromSigma(pml_sigma_fp.get(), pml_PEC_fp[0].get(), pml_PEC_fp[1].get(),
+                                                           macroscopic_properties->m_npy_k_index);
 
             // no need for sigma anymore
             pml_sigma_fp.get()->setVal(0.);
@@ -1156,6 +1154,18 @@ amrex::MultiFab*
 PML::GetE_fp (int comp)
 {
     return pml_E_fp[comp].get();
+}
+
+std::array<MultiFab*,3>
+PML::GetPEC_fp ()
+{
+    return {pml_PEC_fp[0].get(), pml_PEC_fp[1].get(), pml_PEC_fp[2].get()};
+}
+
+amrex::MultiFab*
+PML::GetPEC_fp (int comp)
+{
+    return pml_PEC_fp[comp].get();
 }
 
 std::array<MultiFab*,3>

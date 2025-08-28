@@ -144,6 +144,7 @@ public:
     void ComputePMLFactors (amrex::Real dt);
 
     std::array<amrex::MultiFab*,3> GetE_fp ();
+    std::array<amrex::MultiFab*,3> GetPEC_fp ();
     std::array<amrex::MultiFab*,3> GetB_fp ();
     std::array<amrex::MultiFab*,3> Getj_fp ();
     std::array<amrex::MultiFab*,3> GetE_cp ();
@@ -160,6 +161,7 @@ public:
      * \param[in] comp component of the Efield (0 for Ex, 1 for Ey, 2 for Ez)
      */
     amrex::MultiFab* GetE_fp (int comp);
+    amrex::MultiFab* GetPEC_fp (int comp);
 
     // Used when WarpX::do_pml_dive_cleaning = true
     amrex::MultiFab* GetF_fp ();
