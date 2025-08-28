@@ -12,6 +12,10 @@
 #include<stdexcept>
 #include <regex>
 
+//! This shuts up the compiler about unused variables
+template <class... Ts>
+void ignore_unused (const Ts&...) {}
+
 char cnpy::BigEndianTest() {
     int x = 1;
     return (((char *)&x)[0]) ? '<' : '>';
@@ -175,7 +179,7 @@ void cnpy::parse_zip_footer(FILE* fp, uint16_t& nrecs, size_t& global_header_siz
     assert(comment_len == 0);
 
     // Suppress unused variable warnings for debug builds where asserts are disabled
-    amrex::ignore_unused(disk_no, disk_start, nrecs_on_disk, comment_len);
+    ignore_unused(disk_no, disk_start, nrecs_on_disk, comment_len);
 }
 
 cnpy::NpyArray load_the_npy_file(FILE* fp) {
