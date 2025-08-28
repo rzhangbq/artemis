@@ -61,6 +61,7 @@ plt.ylabel('x')
 plt.tight_layout()
 plt.show()
 
+# chop into these x and y coordinates, note the last point is excluded
 array_T_clean_new = array_T_clean[100:3900, 100:3900]
 flipped_array = 1 - array_T_clean_new
 
