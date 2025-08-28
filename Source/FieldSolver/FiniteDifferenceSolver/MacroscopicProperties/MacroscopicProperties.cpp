@@ -620,6 +620,18 @@ MacroscopicProperties::InitializeMacroMultiFabFromNumpy (
                 } else if (i >= 0 && i < dom_size[0] && j >= dom_size[1]) {
                     // top edge PML
                     idx2d = i * ny + (dom_size[1]-1);
+                } else if (i < 0 && j < 0) {
+                    // bottom left corner PML
+                    idx2d = 0 * ny + 0;
+                } else if (i < 0 && j >= dom_size[1]) {
+                    // top left corner PML
+                    idx2d = 0 * ny + (dom_size[1]-1);
+                } else if (i >= dom_size[0] && j < 0) {
+                    // bottom right corner PML
+                    idx2d = (dom_size[0]-1) * ny + 0;
+                } else if (i >= dom_size[0] && j >= dom_size[1]) {
+                    // top right corner PML
+                    idx2d = (dom_size[0]-1) * ny + (dom_size[1]-1);
                 } else {
                     // valid region PML
                     idx2d = i * ny + j;
