@@ -76,7 +76,20 @@ Inductor::InitData()
 
 
 }
-
+#if( AMREX_SPACEDIM != 3)
+void
+Inductor::EvolveInductorJ (amrex::Real )
+{
+  amrex::Abort("Inductor only works with 3D");
+}
+void
+Inductor::InitializeInductorMultiFabUsingParser (amrex::MultiFab *,
+                                                 amrex::ParserExecutor<3> const& i,
+                                                 const int)
+{
+  amrex::Abort("Inductor only works with 3D");
+}
+#else
 void
 Inductor::EvolveInductorJ (amrex::Real dt)
 {
@@ -161,4 +174,5 @@ Inductor::InitializeInductorMultiFabUsingParser (amrex::MultiFab *inductor_mf,
 
     }
 }
+#endif
 
