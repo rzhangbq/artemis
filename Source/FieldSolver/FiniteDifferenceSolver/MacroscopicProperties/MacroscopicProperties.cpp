@@ -604,13 +604,42 @@ MacroscopicProperties::InitializeMacroMultiFabFromNumpy (
 
         ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 
+            int idx2d;
             // only overwrite macro value from the gds file if you are in the valid region
-            if (i >= 0 && j >= 0 && k >= 0 && i < dom_size[0] && j < dom_size[1] && k < dom_size[2]) {
-                if (k == npy_k_index) {
-                    size_t idx2d = i * ny + j;  // equivalent to i*ny*nz + j*nz + 0 when nz=1
-                    if (dptr[idx2d] == 1) {
-                        fab(i, j, k) = npy_value;
-                    }
+            if (k == npy_k_index) {
+
+                if (i < 0 && j >= 0 && j < dom_size[1]) {
+                    // left edge PML
+                    idx2d = 0 * ny + j;
+                } else if (i >= dom_size[0] && j >= 0 && j < dom_size[1]) {
+                    // right edge PML
+                    idx2d = (dom_size[0]-1) * ny + j;
+                } else if (i >= 0 && i < dom_size[0] && j < 0) {
+                    // bottom edge PML
+                    idx2d = i * ny + 0;
+                } else if (i >= 0 && i < dom_size[0] && j >= dom_size[1]) {
+                    // top edge PML
+                    idx2d = i * ny + (dom_size[1]-1);
+                } else if (i < 0 && j < 0) {
+                    // bottom left corner PML
+                    idx2d = 0 * ny + 0;
+                } else if (i < 0 && j >= dom_size[1]) {
+                    // top left corner PML
+                    idx2d = 0 * ny + (dom_size[1]-1);
+                } else if (i >= dom_size[0] && j < 0) {
+                    // bottom right corner PML
+                    idx2d = (dom_size[0]-1) * ny + 0;
+                } else if (i >= dom_size[0] && j >= dom_size[1]) {
+                    // top right corner PML
+                    idx2d = (dom_size[0]-1) * ny + (dom_size[1]-1);
+                } else {
+                    // valid region PML
+                    idx2d = i * ny + j;
+                }
+
+                // if the mask value is 1, set macroscopic value to npy_value
+                if (dptr[idx2d] == 1) {
+                    fab(i, j, k) = npy_value;
                 }
             }
 
@@ -625,6 +654,9 @@ MacroscopicProperties::InitializePECFromSigma (amrex::MultiFab* sigma_mf,
                                                amrex::MultiFab* PECy,
                                                const int npy_k_index)
 {
+
+    int nComp = PECx->nComp();
+    
     // PEC for Ex is on yz edges
     for (MFIter mfi(*PECx); mfi.isValid(); ++mfi) {
         const Box& bx = mfi.tilebox();
@@ -632,11 +664,11 @@ MacroscopicProperties::InitializePECFromSigma (amrex::MultiFab* sigma_mf,
         Array4<amrex::Real> sigma = sigma_mf->array(mfi);
         Array4<amrex::Real> Px = PECx->array(mfi);
         
-        ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+        ParallelFor(bx, nComp, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
 
             if (k == npy_k_index) {
                 if (sigma(i,j,k) != 0. || sigma(i,j-1,k) != 0) {
-                    Px(i,j,k) = 0.;
+                    Px(i,j,k,n) = 0.;
                 }
             }
 
@@ -650,11 +682,11 @@ MacroscopicProperties::InitializePECFromSigma (amrex::MultiFab* sigma_mf,
         Array4<amrex::Real> sigma = sigma_mf->array(mfi);
         Array4<amrex::Real> Py = PECy->array(mfi);
         
-        ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+        ParallelFor(bx, nComp, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
 
             if (k == npy_k_index) {
                 if (sigma(i,j,k) != 0. || sigma(i-1,j,k) != 0) {
-                    Py(i,j,k) = 0.;
+                    Py(i,j,k,n) = 0.;
                 }
             }
 

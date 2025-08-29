@@ -8,7 +8,7 @@ from util import *
 
 # Load GDS
 gdsii = gdspy.GdsLibrary()
-gdsii.read_gds('mask7-finalNb_new_midified2.gds')
+gdsii.read_gds('crosstalk_test_v01.gds')
 cell = gdsii.top_level()[0]
 
 # Get all polygons grouped by (layer, datatype)
@@ -21,7 +21,7 @@ for layer in unique_layers:
     print(f"  - Layer {layer}")
 
 # Define grid size
-grid_size = (4000, 4000)
+grid_size = (2000, 2000)
 array = np.zeros(grid_size, dtype=np.uint8)
 
 # Define which layers to include
@@ -61,8 +61,8 @@ plt.ylabel('x')
 plt.tight_layout()
 plt.show()
 
-# chop into these x and y coordinates, note the last point is excluded
-array_T_clean_new = array_T_clean[100:3900, 100:3900]
+# x and y coordinates, note the last point is excluded
+array_T_clean_new = array_T_clean[600:1180, 500:1300]
 flipped_array = 1 - array_T_clean_new
 
 
@@ -71,5 +71,5 @@ array_3d = np.repeat(array_T_clean_new[:, :, np.newaxis], 1, axis=2)
 flipped_array_3d = np.repeat(flipped_array[:, :, np.newaxis], 1, axis=2)
 array_3d = array_3d.astype(np.float64)
 flipped_array_3d = flipped_array_3d.astype(np.float64)
-np.save("array_3d_gds_new_large_8_qubit.npy", array_3d)
-np.save("array_3d_gds_new_large_8_qubit_flipped_v2.npy", flipped_array_3d)
+np.save("crosstalk_test_v01.npy", array_3d)
+np.save("crosstalk_test_v01_flipped.npy", flipped_array_3d)

@@ -669,6 +669,9 @@ PML::PML (const int lev, const BoxArray& grid_ba, const DistributionMapping& gri
     WarpX::AllocInitMultiFab(pml_E_fp[0], ba_Ex, dm, ncompe, nge, "pml_E_fp[x]", 0.0_rt);
     WarpX::AllocInitMultiFab(pml_E_fp[1], ba_Ey, dm, ncompe, nge, "pml_E_fp[y]", 0.0_rt);
     WarpX::AllocInitMultiFab(pml_E_fp[2], ba_Ez, dm, ncompe, nge, "pml_E_fp[z]", 0.0_rt);
+    WarpX::AllocInitMultiFab(pml_PEC_fp[0], ba_Ex, dm, ncompe, nge, "pml_PEC_fp[x]", 0.0_rt);
+    WarpX::AllocInitMultiFab(pml_PEC_fp[1], ba_Ey, dm, ncompe, nge, "pml_PEC_fp[y]", 0.0_rt);
+    WarpX::AllocInitMultiFab(pml_PEC_fp[2], ba_Ez, dm, ncompe, nge, "pml_PEC_fp[z]", 0.0_rt);
 
     const amrex::BoxArray ba_Bx = amrex::convert(ba, WarpX::GetInstance().getBfield_fp(0,0).ixType().toIntVect());
     const amrex::BoxArray ba_By = amrex::convert(ba, WarpX::GetInstance().getBfield_fp(0,1).ixType().toIntVect());
@@ -720,6 +723,18 @@ PML::PML (const int lev, const BoxArray& grid_ba, const DistributionMapping& gri
                                                                      lev,
                                                                      macroscopic_properties->m_npy_k_index,
                                                                      macroscopic_properties->m_sigma_npy_value);
+        }
+
+        if (warpx.use_PEC_mask) {
+            pml_PEC_fp[0]->setVal(1.);
+            pml_PEC_fp[1]->setVal(1.);
+            pml_PEC_fp[2]->setVal(1.);
+
+            macroscopic_properties->InitializePECFromSigma(pml_sigma_fp.get(), pml_PEC_fp[0].get(), pml_PEC_fp[1].get(),
+                                                           macroscopic_properties->m_npy_k_index);
+
+            // no need for sigma anymore
+            pml_sigma_fp.get()->setVal(0.);
         }
 
         // Initialize epsilon, permittivity
@@ -1139,6 +1154,18 @@ amrex::MultiFab*
 PML::GetE_fp (int comp)
 {
     return pml_E_fp[comp].get();
+}
+
+std::array<MultiFab*,3>
+PML::GetPEC_fp ()
+{
+    return {pml_PEC_fp[0].get(), pml_PEC_fp[1].get(), pml_PEC_fp[2].get()};
+}
+
+amrex::MultiFab*
+PML::GetPEC_fp (int comp)
+{
+    return pml_PEC_fp[comp].get();
 }
 
 std::array<MultiFab*,3>
