@@ -43,10 +43,10 @@ Inductor::ReadParameters ()
                                    utils::parser::makeParser(m_str_inductor_z_function, {"x", "y", "z"}));
 }
 
+#if( AMREX_SPACEDIM == 3)
 void
 Inductor::InitData()
 {
-#if( AMREX_SPACEDIM == 3)
     auto& warpx = WarpX::GetInstance();
 
     const int lev = 0;
@@ -74,25 +74,8 @@ Inductor::InitData()
     InitializeInductorMultiFabUsingParser(m_inductor_x_mf.get(), m_inductor_x_parser->compile<3>(), lev);
     InitializeInductorMultiFabUsingParser(m_inductor_y_mf.get(), m_inductor_y_parser->compile<3>(), lev);
     InitializeInductorMultiFabUsingParser(m_inductor_z_mf.get(), m_inductor_z_parser->compile<3>(), lev);
-#else
-    amrex::Abort("Inductor only works with 3D");
-#endif
+}
 
-}
-#if( AMREX_SPACEDIM != 3)
-void
-Inductor::EvolveInductorJ (amrex::Real )
-{
-  amrex::Abort("Inductor only works with 3D");
-}
-void
-Inductor::InitializeInductorMultiFabUsingParser (amrex::MultiFab *,
-                                                 amrex::ParserExecutor<3> const& i,
-                                                 const int)
-{
-  amrex::Abort("Inductor only works with 3D");
-}
-#else
 void
 Inductor::EvolveInductorJ (amrex::Real dt)
 {
@@ -177,5 +160,25 @@ Inductor::InitializeInductorMultiFabUsingParser (amrex::MultiFab *inductor_mf,
 
     }
 }
-#endif
 
+
+#else
+void
+Inductor::InitData()
+{
+    amrex::Abort("Inductor only works with 3D");
+}
+
+void
+Inductor::EvolveInductorJ (amrex::Real )
+{
+  amrex::Abort("Inductor only works with 3D");
+}
+void
+Inductor::InitializeInductorMultiFabUsingParser (amrex::MultiFab *,
+                                                 amrex::ParserExecutor<3> const& i,
+                                                 const int)
+{
+  amrex::Abort("Inductor only works with 3D");
+}
+#endif
