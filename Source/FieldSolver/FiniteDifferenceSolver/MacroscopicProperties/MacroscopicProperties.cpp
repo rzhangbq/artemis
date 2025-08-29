@@ -656,7 +656,7 @@ MacroscopicProperties::InitializePECFromSigma (amrex::MultiFab* sigma_mf,
 {
 
     int nComp = PECx->nComp();
-    
+
     // PEC for Ex is on yz edges
     for (MFIter mfi(*PECx); mfi.isValid(); ++mfi) {
         const Box& bx = mfi.tilebox();
