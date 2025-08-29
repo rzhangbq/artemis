@@ -46,6 +46,7 @@ Inductor::ReadParameters ()
 void
 Inductor::InitData()
 {
+#if( AMREX_SPACEDIM == 3)
     auto& warpx = WarpX::GetInstance();
 
     const int lev = 0;
@@ -73,7 +74,9 @@ Inductor::InitData()
     InitializeInductorMultiFabUsingParser(m_inductor_x_mf.get(), m_inductor_x_parser->compile<3>(), lev);
     InitializeInductorMultiFabUsingParser(m_inductor_y_mf.get(), m_inductor_y_parser->compile<3>(), lev);
     InitializeInductorMultiFabUsingParser(m_inductor_z_mf.get(), m_inductor_z_parser->compile<3>(), lev);
-
+#else
+    amrex::Abort("Inductor only works with 3D");
+#endif
 
 }
 #if( AMREX_SPACEDIM != 3)
