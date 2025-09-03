@@ -46,7 +46,11 @@ macroscopic.npy_k_index2 = 3
 macroscopic.sigma_npy_file = "voyageurs_layer1.npy"
 macroscopic.sigma_npy_file2 = "voyageurs_layer2.npy"
 macroscopic.sigma_npy_value = 1.e11
-algo.use_PEC_mask = 0
+algo.use_PEC_mask = 1
+
+macroscopic.mu_npy_file = "voyageurs_layer1.npy"
+macroscopic.mu_npy_file2 = "voyageurs_layer2.npy"
+macroscopic.mu_npy_value = 1.25663706e-06
 
 #################################
 ############ FIELDS #############
@@ -56,12 +60,12 @@ algo.use_PEC_mask = 0
 # domain size
 # n_cellx/y/z and Lx/y/z are needed to calculate dx/dy/dz
 ###############
-my_constants.n_cellx = 4000
-my_constants.n_celly = 4000
+my_constants.n_cellx = 7544
+my_constants.n_celly = 7544
 my_constants.n_cellz = 4
 
-my_constants.max_grid_sizex = 4000
-my_constants.max_grid_sizey = 4000
+my_constants.max_grid_sizex = 92
+my_constants.max_grid_sizey = 92
 my_constants.max_grid_sizez = 4
 my_constants.blocking_factor = 2
 
@@ -69,9 +73,9 @@ my_constants.prob_lox = 0.
 my_constants.prob_loy = 0.
 my_constants.prob_loz = 0.
 
-my_constants.prob_hix = 10000.e-6
-my_constants.prob_hiy = 10000.e-6
-my_constants.prob_hiz = 320.e-6
+my_constants.prob_hix = 9430.e-6
+my_constants.prob_hiy = 9430.e-6
+my_constants.prob_hiz = 300.e-6
 
 my_constants.Lx = prob_hix - prob_lox
 my_constants.Ly = prob_hiy - prob_loy
@@ -92,7 +96,7 @@ my_constants.mu_r_si = 1.0
 ###############
 # silicon and palladium cross section
 ###############
-my_constants.h_si = 160.e-6
+my_constants.h_si = 150.e-6
 
 ###############
 # derived quantities and fundamental constants - don't touch these
