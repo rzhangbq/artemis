@@ -147,6 +147,6 @@ diagnostics.diags_names = plt
 ###############
 # full plotfiles
 plt.intervals = 1
-plt.fields_to_plot = Ex Ey Ez Bx By Bz sigma
+plt.fields_to_plot = Ex Ey Ez Bx By Bz mu
 plt.diag_type = Full
 plt.file_min_digits = 7
