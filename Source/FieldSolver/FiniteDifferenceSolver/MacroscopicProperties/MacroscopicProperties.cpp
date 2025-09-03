@@ -670,14 +670,14 @@ MacroscopicProperties::InitializePECFromSigma (amrex::MultiFab* sigma_mf,
 {
 
     int nComp = PECx->nComp();
-    
+
     // PEC for Ex is on yz edges
     for (MFIter mfi(*PECx); mfi.isValid(); ++mfi) {
         const Box& bx = mfi.tilebox();
 
         Array4<amrex::Real> sigma = sigma_mf->array(mfi);
         Array4<amrex::Real> Px = PECx->array(mfi);
-        
+
         ParallelFor(bx, nComp, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
 
             if (k == npy_k_index) {
@@ -695,7 +695,7 @@ MacroscopicProperties::InitializePECFromSigma (amrex::MultiFab* sigma_mf,
 
         Array4<amrex::Real> sigma = sigma_mf->array(mfi);
         Array4<amrex::Real> Py = PECy->array(mfi);
-        
+
         ParallelFor(bx, nComp, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) {
 
             if (k == npy_k_index) {
