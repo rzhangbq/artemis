@@ -739,6 +739,10 @@ PML::PML (const int lev, const BoxArray& grid_ba, const DistributionMapping& gri
 
             macroscopic_properties->InitializePECFromSigma(pml_sigma_fp.get(), pml_PEC_fp[0].get(), pml_PEC_fp[1].get(),
                                                            macroscopic_properties->m_npy_k_index);
+            if (!macroscopic_properties->m_sigma_npy_filename2.empty()) {
+                macroscopic_properties->InitializePECFromSigma(pml_sigma_fp.get(), pml_PEC_fp[0].get(), pml_PEC_fp[1].get(),
+                                                               macroscopic_properties->m_npy_k_index2);
+            }
 
             // no need for sigma anymore
             pml_sigma_fp.get()->setVal(0.);
