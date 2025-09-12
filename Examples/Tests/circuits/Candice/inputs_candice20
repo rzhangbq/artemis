@@ -126,9 +126,6 @@ warpx.E_excitation_on_grid_style = parse_E_excitation_grid_function
 warpx.Ex_excitation_flag_function(x,y,z) = "flag_none"
 # thin excitation
 warpx.Ey_excitation_flag_function(x,y,z) = "flag_ss * ( (y >= 702.5e-6 + ddy) * (y <= 712.5e-6 - ddy) + (y >= 717.5e-6 + ddy) * (y <= 727.5e-6 - ddy)) * (z > h_top - ddz) * (z < h_top + ddz) * (x > 162.5e-6 - ddx) * (x < 162.5e-6 + ddx)"
-# excitation near left boundary
-#warpx.Ey_excitation_flag_function(x,y,z) = "flag_ss * ( (y >= 531.25e-6 + ddy) * (y <= 623.75e-6 - ddy) + (y >= 806.25e-6 + ddy) * (y <= 898.75e-6 - ddy)) * (z > h_top - ddz) * (z < h_top + ddz) * (x > 1.25e-6 - ddx) * (x < 1.25e-6 + ddx)"
-
 warpx.Ez_excitation_flag_function(x,y,z) = "flag_none"
 
 
@@ -137,9 +134,6 @@ warpx.Ex_excitation_grid_function(x,y,z,t) = "0."
 # thin excitation
 warpx.Ey_excitation_grid_function(x,y,z,t) = "exp(-(t-3*TP)**2/(2*TP**2))*sin(2*pi*freq*t) *
                                                       ( (y >= 702.5e-6 + ddy) * (y <= 712.5e-6 - ddy) - (y >= 717.5e-6 + ddy) * (y <= 727.5e-6 - ddy)) * (z > h_top - ddz) * (z < h_top + ddz) * (x > 162.5e-6 - ddx) * (x < 162.5e-6 + ddx)"
-# excitation near left boundary
-#warpx.Ey_excitation_grid_function(x,y,z,t) = "exp(-(t-3*TP)**2/(2*TP**2))*sin(2*pi*freq*t) *
-#                                                      ( (y >= 531.25e-6 + ddy) * (y <= 623.75e-6 - ddy) - (y >= 806.25e-6 + ddy) * (y <= 898.75e-6 - ddy)) * (z > h_top - ddz) * (z < h_top + ddz) * (x > 1.25e-6 - ddx) * (x < 1.25e-6 + ddx)"
 warpx.Ez_excitation_grid_function(x,y,z,t) = "0."
 
 ###############
@@ -153,7 +147,7 @@ diagnostics.diags_names = plt chk
 ###############
 # full plotfiles
 plt.intervals = 1000
-plt.fields_to_plot = Ex Ey Ez Bx By Bz mu epsilon
+plt.fields_to_plot = Ex Ey Ez Bx By Bz mu
 plt.diag_type = Full
 plt.file_min_digits = 7
 plt.diag_lo = 0. 0. 145.51e-6
@@ -163,3 +157,6 @@ chk.intervals = 100000
 chk.diag_type = Full
 chk.format = checkpoint
 chk.file_min_digits = 7
+
+# if you restart, remove mu, sigma, and epsilon from plotfile
+#amr.restart = diags/chk0100000
