@@ -149,7 +149,7 @@ warpx.Ez_excitation_grid_function(x,y,z,t) = "0."
 warpx.field_io_nfiles=64
 warpx.particle_io_nfiles=64
 
-diagnostics.diags_names = plt
+diagnostics.diags_names = plt chk
 ###############
 # full plotfiles
 plt.intervals = 1000
@@ -158,3 +158,8 @@ plt.diag_type = Full
 plt.file_min_digits = 7
 plt.diag_lo = 0. 0. 145.51e-6
 plt.diag_hi = 9430.e-6 9430.e-6 151.49e-6
+
+chk.intervals = 100000
+chk.diag_type = Full
+chk.format = checkpoint
+chk.file_min_digits = 7
