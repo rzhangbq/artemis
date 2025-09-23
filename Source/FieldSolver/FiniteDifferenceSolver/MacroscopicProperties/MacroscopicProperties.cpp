@@ -290,6 +290,9 @@ MacroscopicProperties::InitData ()
         PECz->setVal(1.);
 
         InitializePECFromSigma(m_sigma_mf.get(), PECx, PECy, m_npy_k_index);
+        if (!m_sigma_npy_filename2.empty()) {
+            InitializePECFromSigma(m_sigma_mf.get(), PECx, PECy, m_npy_k_index2);
+        }
         // no need for sigma anymore
         m_sigma_mf->setVal(0.);
     }
