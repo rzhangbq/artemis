@@ -1,7 +1,7 @@
 ################################
 ####### GENERAL PARAMETERS ######
 #################################
-max_step = 5000000
+max_step = 9000000
 
 amr.n_cell = n_cellx n_celly n_cellz
 amr.max_grid_size_x = max_grid_sizex
@@ -145,16 +145,24 @@ warpx.Ez_excitation_grid_function(x,y,z,t) = "0."
 warpx.field_io_nfiles=64
 warpx.particle_io_nfiles=64
 
-diagnostics.diags_names = plt chk
+diagnostics.diags_names = plt full chk
+
 ###############
-# full plotfiles
-plt.intervals = 1000
+# reduced plotfiles
+plt.intervals = 4000
 plt.fields_to_plot = Ex Ey Ez Bx By Bz mu
 plt.diag_type = Full
 plt.file_min_digits = 7
 plt.diag_lo = 0. 0. 145.51e-6
 plt.diag_hi = 9430.e-6 9430.e-6 151.49e-6
 
+# full plotfiles
+full.intervals = 1000000
+full.fields_to_plot = Ex Ey Ez Bx By Bz mu
+full.diag_type = Full
+full.file_min_digits = 7
+
+# checkpoint
 chk.intervals = 100000
 chk.diag_type = Full
 chk.format = checkpoint
