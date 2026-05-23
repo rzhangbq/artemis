@@ -260,6 +260,28 @@ MacroscopicProperties::InitData ()
     m_mu_mf = std::make_unique<amrex::MultiFab>(ba, dmap, 1, ng_EB_alloc);
 
     ////////////////////////
+    // PEC mask
+
+    // call this before setting sigma in the rest of the domain since this zeros sigma once the PEC mask is defined
+    if (warpx.use_PEC_mask) {
+        // get pointer to PEC mask in WarpX class
+        amrex::MultiFab * PECx = warpx.get_pointer_PEC_fp(lev,0);
+        amrex::MultiFab * PECy = warpx.get_pointer_PEC_fp(lev,1);
+        amrex::MultiFab * PECz = warpx.get_pointer_PEC_fp(lev,2);
+
+        PECx->setVal(1.);
+        PECy->setVal(1.);
+        PECz->setVal(1.);
+
+        InitializePECFromSigma(m_sigma_mf.get(), PECx, PECy, m_npy_k_index);
+        if (!m_sigma_npy_filename2.empty()) {
+            InitializePECFromSigma(m_sigma_mf.get(), PECx, PECy, m_npy_k_index2);
+        }
+        // zero sigma
+        m_sigma_mf->setVal(0.);
+    }
+
+    ////////////////////////
     // Initialize sigma
     if (m_sigma_s == "constant") {
 
@@ -277,24 +299,6 @@ MacroscopicProperties::InitData ()
         if (!m_sigma_npy_filename2.empty()) {
             InitializeMacroMultiFabFromNumpy(m_sigma_mf.get(), m_sigma_npy_filename2, lev, m_npy_k_index2, m_sigma_npy_value);
         }
-    }
-
-    if (warpx.use_PEC_mask) {
-        // get pointer to PEC mask in WarpX class
-        amrex::MultiFab * PECx = warpx.get_pointer_PEC_fp(lev,0);
-        amrex::MultiFab * PECy = warpx.get_pointer_PEC_fp(lev,1);
-        amrex::MultiFab * PECz = warpx.get_pointer_PEC_fp(lev,2);
-
-        PECx->setVal(1.);
-        PECy->setVal(1.);
-        PECz->setVal(1.);
-
-        InitializePECFromSigma(m_sigma_mf.get(), PECx, PECy, m_npy_k_index);
-        if (!m_sigma_npy_filename2.empty()) {
-            InitializePECFromSigma(m_sigma_mf.get(), PECx, PECy, m_npy_k_index2);
-        }
-        // no need for sigma anymore
-        m_sigma_mf->setVal(0.);
     }
 
     ////////////////////////
