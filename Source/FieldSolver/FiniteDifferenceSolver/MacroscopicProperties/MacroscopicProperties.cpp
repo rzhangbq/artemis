@@ -264,6 +264,16 @@ MacroscopicProperties::InitData ()
 
     // call this before setting sigma in the rest of the domain since this zeros sigma once the PEC mask is defined
     if (warpx.use_PEC_mask) {
+
+        // read in the layer(s) from the numpy file(s)
+        if (m_sigma_s == "parse_sigma_npy_file" || m_sigma_s == "parse_sigma_both") {
+            InitializeMacroMultiFabFromNumpy(m_sigma_mf.get(), m_sigma_npy_filename, lev, m_npy_k_index, m_sigma_npy_value);
+            if (!m_sigma_npy_filename2.empty()) {
+                InitializeMacroMultiFabFromNumpy(m_sigma_mf.get(), m_sigma_npy_filename2, lev, m_npy_k_index2, m_sigma_npy_value);
+            }
+        } else {
+            amrex::Abort("warpx.use_PEC_mask requies a npy file);
+        }
         // get pointer to PEC mask in WarpX class
         amrex::MultiFab * PECx = warpx.get_pointer_PEC_fp(lev,0);
         amrex::MultiFab * PECy = warpx.get_pointer_PEC_fp(lev,1);
@@ -293,11 +303,13 @@ MacroscopicProperties::InitData ()
         InitializeMacroMultiFabUsingParser(m_sigma_mf.get(), m_sigma_parser->compile<3>(), lev);
     }
 
-    // Step 2: Overwrite with numpy mask in valid region if provided
-    if (m_sigma_s == "parse_sigma_npy_file" || m_sigma_s == "parse_sigma_both") {
-        InitializeMacroMultiFabFromNumpy(m_sigma_mf.get(), m_sigma_npy_filename, lev, m_npy_k_index, m_sigma_npy_value);
-        if (!m_sigma_npy_filename2.empty()) {
-            InitializeMacroMultiFabFromNumpy(m_sigma_mf.get(), m_sigma_npy_filename2, lev, m_npy_k_index2, m_sigma_npy_value);
+    // Step 2: If not using PEC mask, overwrite with numpy mask in valid region if provided
+    if (!warpx.use_PEC_mask) {
+        if (m_sigma_s == "parse_sigma_npy_file" || m_sigma_s == "parse_sigma_both") {
+            InitializeMacroMultiFabFromNumpy(m_sigma_mf.get(), m_sigma_npy_filename, lev, m_npy_k_index, m_sigma_npy_value);
+            if (!m_sigma_npy_filename2.empty()) {
+                InitializeMacroMultiFabFromNumpy(m_sigma_mf.get(), m_sigma_npy_filename2, lev, m_npy_k_index2, m_sigma_npy_value);
+            }
         }
     }
 
