@@ -272,7 +272,7 @@ MacroscopicProperties::InitData ()
                 InitializeMacroMultiFabFromNumpy(m_sigma_mf.get(), m_sigma_npy_filename2, lev, m_npy_k_index2, m_sigma_npy_value);
             }
         } else {
-            amrex::Abort("warpx.use_PEC_mask requies a npy file);
+            amrex::Abort("warpx.use_PEC_mask requies a npy file");
         }
         // get pointer to PEC mask in WarpX class
         amrex::MultiFab * PECx = warpx.get_pointer_PEC_fp(lev,0);
