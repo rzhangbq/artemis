@@ -486,6 +486,18 @@ WarpX::OneStep_nosub (Real cur_time)
         EvolveG(0.5_rt * dt[0], DtType::FirstHalf);
         FillBoundaryF(guard_cells.ng_FieldSolverF);
         FillBoundaryG(guard_cells.ng_FieldSolverG);
+        if (WarpX::em_solver_medium == MediumForEM::Macroscopic &&
+            WarpX::macroscopic_solver_algo == MacroscopicSolverAlgo::ADI) {
+#ifdef WARPX_MAG_LLG
+            WARPX_ABORT_WITH_MESSAGE("Macroscopic ADI is not implemented with WARPX_MAG_LLG.");
+#else
+            MacroscopicEvolveADI(dt[0]); // We now have E^{n+1} and B^{n+1}
+            FillBoundaryE(guard_cells.ng_FieldSolver, WarpX::sync_nodal_points);
+            FillBoundaryB(guard_cells.ng_FieldSolver, WarpX::sync_nodal_points);
+            ApplyExternalFieldExcitationOnGrid(ExternalFieldType::EfieldExternal);
+            ApplyExternalFieldExcitationOnGrid(ExternalFieldType::BfieldExternal, DtType::SecondHalf);
+#endif
+        } else {
 #ifndef WARPX_MAG_LLG
         EvolveB(0.5_rt * dt[0], DtType::FirstHalf); // We now have B^{n+1/2}
         FillBoundaryB(guard_cells.ng_FieldSolver, WarpX::sync_nodal_points);
@@ -552,6 +564,7 @@ WarpX::OneStep_nosub (Real cur_time)
         // ApplyExternalFieldExcitation
         ApplyExternalFieldExcitationOnGrid(ExternalFieldType::BfieldExternal, DtType::SecondHalf); // redundant for hs; need to fix the way to increment ss
 #endif
+        }
 
 #ifdef WARPX_MAG_LLG
 #ifndef WARPX_DIM_RZ

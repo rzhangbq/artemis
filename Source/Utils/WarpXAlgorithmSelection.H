@@ -46,7 +46,8 @@ struct LumpedInductor {
 struct MacroscopicSolverAlgo {
     enum {
         BackwardEuler = 0,
-        LaxWendroff = 1
+        LaxWendroff = 1,
+        ADI = 2
     };
 };
 

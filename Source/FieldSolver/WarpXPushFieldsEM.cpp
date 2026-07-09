@@ -1145,6 +1145,48 @@ WarpX::MacroscopicEvolveE (int lev, PatchType patch_type, amrex::Real a_dt) {
     ApplyEfieldBoundary(lev, patch_type);
 }
 
+void
+WarpX::MacroscopicEvolveADI (amrex::Real a_dt)
+{
+    for (int lev = 0; lev <= finest_level; ++lev ) {
+        MacroscopicEvolveADI(lev, a_dt);
+    }
+}
+
+void
+WarpX::MacroscopicEvolveADI (int lev, amrex::Real a_dt) {
+
+    WARPX_PROFILE("WarpX::MacroscopicEvolveADI()");
+
+    WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+        lev == 0,
+        "Macroscopic ADI is not implemented for lev>0."
+    );
+
+    MacroscopicEvolveADI(lev, PatchType::fine, a_dt);
+}
+
+void
+WarpX::MacroscopicEvolveADI (int lev, PatchType patch_type, amrex::Real a_dt) {
+
+    WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+        patch_type == PatchType::fine,
+        "Macroscopic ADI is not implemented for coarse patches."
+    );
+    WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+        !(do_pml && pml[lev]->ok()),
+        "Macroscopic ADI currently supports periodic domains without PML."
+    );
+
+#ifdef WARPX_MAG_LLG
+    amrex::ignore_unused(lev, a_dt);
+    WARPX_ABORT_WITH_MESSAGE("Macroscopic ADI is not implemented with WARPX_MAG_LLG.");
+#else
+    m_fdtd_solver_fp[lev]->MacroscopicEvolveADI(
+        Efield_fp[lev], Bfield_fp[lev], a_dt, Geom(lev).periodicity());
+#endif
+}
+
 #ifndef WARPX_DIM_RZ
 #ifdef WARPX_MAG_LLG
 // define WarpX::MacroscopicEvolveHM
