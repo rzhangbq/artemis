@@ -10,7 +10,6 @@
 #include <AMReX_MultiFab.H>
 #include <AMReX_REAL.H>
 
-#include <algorithm>
 #include <array>
 #include <memory>
 #include <vector>
@@ -19,6 +18,24 @@ using namespace amrex;
 
 namespace
 {
+    struct AdiCoeffs
+    {
+        Real dx = 0._rt;
+        Real dy = 0._rt;
+        Real dz = 0._rt;
+        Real inv_dx = 0._rt;
+        Real inv_dy = 0._rt;
+        Real inv_dz = 0._rt;
+        Real cx = 0._rt;
+        Real cy = 0._rt;
+        Real cz = 0._rt;
+        Real diag_x = 0._rt;
+        Real diag_y = 0._rt;
+        Real diag_z = 0._rt;
+        Real dt = 0._rt;
+        Real dtd2 = 0._rt;
+    };
+
     AMREX_FORCE_INLINE
     Real line_value (Array4<Real const> const& a, int i, int j, int k,
                      int dir, int p) noexcept
@@ -165,6 +182,328 @@ namespace
             component->FillBoundary(periodicity);
         }
     }
+
+    // First half-step RHS: implicit Ex along y.
+    MultiFab build_rhs_ex1 (
+        MultiFab const& ex, MultiFab const& ey,
+        MultiFab const& by, MultiFab const& bz,
+        AdiCoeffs const& c)
+    {
+        MultiFab rhs = make_rhs(ex);
+        for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
+            auto const rhs_arr = rhs.array(mfi);
+            auto const ex_arr = ex.const_array(mfi);
+            auto const ey_arr = ey.const_array(mfi);
+            auto const by_arr = by.const_array(mfi);
+            auto const bz_arr = bz.const_array(mfi);
+            Box const& bx = mfi.validbox();
+            for (int k = bx.smallEnd(2); k <= bx.bigEnd(2); ++k) {
+                for (int j = bx.smallEnd(1); j <= bx.bigEnd(1); ++j) {
+                    for (int i = bx.smallEnd(0); i <= bx.bigEnd(0); ++i) {
+                        rhs_arr(i,j,k) = c.cy * ex_arr(i,j,k)
+                            + 2._rt * c.dy * c.dy / c.dt *
+                              ((bz_arr(i,j,k) - bz_arr(i,j-1,k)) * c.inv_dy -
+                               (by_arr(i,j,k) - by_arr(i,j,k-1)) * c.inv_dz)
+                            + c.dy * ((ey_arr(i+1,j-1,k) - ey_arr(i,j-1,k)) * c.inv_dx -
+                                      (ey_arr(i+1,j,k) - ey_arr(i,j,k)) * c.inv_dx);
+                    }
+                }
+            }
+        }
+        return rhs;
+    }
+
+    // First half-step RHS: implicit Ey along z.
+    MultiFab build_rhs_ey1 (
+        MultiFab const& ey, MultiFab const& ez,
+        MultiFab const& bx, MultiFab const& bz,
+        AdiCoeffs const& c)
+    {
+        MultiFab rhs = make_rhs(ey);
+        for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
+            auto const rhs_arr = rhs.array(mfi);
+            auto const ey_arr = ey.const_array(mfi);
+            auto const ez_arr = ez.const_array(mfi);
+            auto const bx_arr = bx.const_array(mfi);
+            auto const bz_arr = bz.const_array(mfi);
+            Box const& b = mfi.validbox();
+            for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
+                for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
+                    for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
+                        rhs_arr(i,j,k) = c.cz * ey_arr(i,j,k)
+                            + 2._rt * c.dz * c.dz / c.dt *
+                              ((bx_arr(i,j,k) - bx_arr(i,j,k-1)) * c.inv_dz -
+                               (bz_arr(i,j,k) - bz_arr(i-1,j,k)) * c.inv_dx)
+                            + c.dz * ((ez_arr(i,j+1,k-1) - ez_arr(i,j,k-1)) * c.inv_dy -
+                                      (ez_arr(i,j+1,k) - ez_arr(i,j,k)) * c.inv_dy);
+                    }
+                }
+            }
+        }
+        return rhs;
+    }
+
+    // First half-step RHS: implicit Ez along x.
+    MultiFab build_rhs_ez1 (
+        MultiFab const& ez, MultiFab const& ex,
+        MultiFab const& bx, MultiFab const& by,
+        AdiCoeffs const& c)
+    {
+        MultiFab rhs = make_rhs(ez);
+        for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
+            auto const rhs_arr = rhs.array(mfi);
+            auto const ez_arr = ez.const_array(mfi);
+            auto const ex_arr = ex.const_array(mfi);
+            auto const bx_arr = bx.const_array(mfi);
+            auto const by_arr = by.const_array(mfi);
+            Box const& b = mfi.validbox();
+            for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
+                for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
+                    for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
+                        rhs_arr(i,j,k) = c.cx * ez_arr(i,j,k)
+                            + 2._rt * c.dx * c.dx / c.dt *
+                              ((by_arr(i,j,k) - by_arr(i-1,j,k)) * c.inv_dx -
+                               (bx_arr(i,j,k) - bx_arr(i,j-1,k)) * c.inv_dy)
+                            + c.dx * ((ex_arr(i-1,j,k+1) - ex_arr(i-1,j,k)) * c.inv_dz -
+                                      (ex_arr(i,j,k+1) - ex_arr(i,j,k)) * c.inv_dz);
+                    }
+                }
+            }
+        }
+        return rhs;
+    }
+
+    // Second half-step RHS: implicit Ex along z.
+    MultiFab build_rhs_ex2 (
+        MultiFab const& ex, MultiFab const& ez,
+        MultiFab const& by, MultiFab const& bz,
+        AdiCoeffs const& c)
+    {
+        MultiFab rhs = make_rhs(ex);
+        for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
+            auto const rhs_arr = rhs.array(mfi);
+            auto const ex_arr = ex.const_array(mfi);
+            auto const ez_arr = ez.const_array(mfi);
+            auto const by_arr = by.const_array(mfi);
+            auto const bz_arr = bz.const_array(mfi);
+            Box const& b = mfi.validbox();
+            for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
+                for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
+                    for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
+                        rhs_arr(i,j,k) = c.cz * ex_arr(i,j,k)
+                            + 2._rt * c.dz * c.dz / c.dt *
+                              ((bz_arr(i,j,k) - bz_arr(i,j-1,k)) * c.inv_dy -
+                               (by_arr(i,j,k) - by_arr(i,j,k-1)) * c.inv_dz)
+                            + c.dz * ((ez_arr(i+1,j,k-1) - ez_arr(i,j,k-1)) * c.inv_dx -
+                                      (ez_arr(i+1,j,k) - ez_arr(i,j,k)) * c.inv_dx);
+                    }
+                }
+            }
+        }
+        return rhs;
+    }
+
+    // Second half-step RHS: implicit Ey along x.
+    MultiFab build_rhs_ey2 (
+        MultiFab const& ey, MultiFab const& ex,
+        MultiFab const& bx, MultiFab const& bz,
+        AdiCoeffs const& c)
+    {
+        MultiFab rhs = make_rhs(ey);
+        for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
+            auto const rhs_arr = rhs.array(mfi);
+            auto const ey_arr = ey.const_array(mfi);
+            auto const ex_arr = ex.const_array(mfi);
+            auto const bx_arr = bx.const_array(mfi);
+            auto const bz_arr = bz.const_array(mfi);
+            Box const& b = mfi.validbox();
+            for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
+                for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
+                    for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
+                        rhs_arr(i,j,k) = c.cx * ey_arr(i,j,k)
+                            + 2._rt * c.dx * c.dx / c.dt *
+                              ((bx_arr(i,j,k) - bx_arr(i,j,k-1)) * c.inv_dz -
+                               (bz_arr(i,j,k) - bz_arr(i-1,j,k)) * c.inv_dx)
+                            + c.dx * ((ex_arr(i-1,j+1,k) - ex_arr(i-1,j,k)) * c.inv_dy -
+                                      (ex_arr(i,j+1,k) - ex_arr(i,j,k)) * c.inv_dy);
+                    }
+                }
+            }
+        }
+        return rhs;
+    }
+
+    // Second half-step RHS: implicit Ez along y.
+    MultiFab build_rhs_ez2 (
+        MultiFab const& ez, MultiFab const& ey,
+        MultiFab const& bx, MultiFab const& by,
+        AdiCoeffs const& c)
+    {
+        MultiFab rhs = make_rhs(ez);
+        for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
+            auto const rhs_arr = rhs.array(mfi);
+            auto const ez_arr = ez.const_array(mfi);
+            auto const ey_arr = ey.const_array(mfi);
+            auto const bx_arr = bx.const_array(mfi);
+            auto const by_arr = by.const_array(mfi);
+            Box const& b = mfi.validbox();
+            for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
+                for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
+                    for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
+                        rhs_arr(i,j,k) = c.cy * ez_arr(i,j,k)
+                            + 2._rt * c.dy * c.dy / c.dt *
+                              ((by_arr(i,j,k) - by_arr(i-1,j,k)) * c.inv_dx -
+                               (bx_arr(i,j,k) - bx_arr(i,j-1,k)) * c.inv_dy)
+                            + c.dy * ((ey_arr(i,j-1,k+1) - ey_arr(i,j-1,k)) * c.inv_dz -
+                                      (ey_arr(i,j,k+1) - ey_arr(i,j,k)) * c.inv_dz);
+                    }
+                }
+            }
+        }
+        return rhs;
+    }
+
+    void solve_implicit_ex1 (MultiFab& ex, MultiFab const& rhs, AdiCoeffs const& c)
+    {
+        solve_periodic_lines(ex, rhs, 1, c.diag_y);
+    }
+
+    void solve_implicit_ey1 (MultiFab& ey, MultiFab const& rhs, AdiCoeffs const& c)
+    {
+        solve_periodic_lines(ey, rhs, 2, c.diag_z);
+    }
+
+    void solve_implicit_ez1 (MultiFab& ez, MultiFab const& rhs, AdiCoeffs const& c)
+    {
+        solve_periodic_lines(ez, rhs, 0, c.diag_x);
+    }
+
+    void solve_implicit_ex2 (MultiFab& ex, MultiFab const& rhs, AdiCoeffs const& c)
+    {
+        solve_periodic_lines(ex, rhs, 2, c.diag_z);
+    }
+
+    void solve_implicit_ey2 (MultiFab& ey, MultiFab const& rhs, AdiCoeffs const& c)
+    {
+        solve_periodic_lines(ey, rhs, 0, c.diag_x);
+    }
+
+    void solve_implicit_ez2 (MultiFab& ez, MultiFab const& rhs, AdiCoeffs const& c)
+    {
+        solve_periodic_lines(ez, rhs, 1, c.diag_y);
+    }
+
+    void step_bx (MultiFab& bx, MultiFab const& ey, MultiFab const& ez, AdiCoeffs const& c)
+    {
+        for (MFIter mfi(bx); mfi.isValid(); ++mfi) {
+            auto const bx_arr = bx.array(mfi);
+            auto const ey_arr = ey.const_array(mfi);
+            auto const ez_arr = ez.const_array(mfi);
+            Box const& b = mfi.validbox();
+            for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
+                for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
+                    for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
+                        bx_arr(i,j,k) += c.dtd2 * ((ey_arr(i,j,k+1) - ey_arr(i,j,k)) * c.inv_dz -
+                                                   (ez_arr(i,j+1,k) - ez_arr(i,j,k)) * c.inv_dy);
+                    }
+                }
+            }
+        }
+    }
+
+    void step_by (MultiFab& by, MultiFab const& ez, MultiFab const& ex, AdiCoeffs const& c)
+    {
+        for (MFIter mfi(by); mfi.isValid(); ++mfi) {
+            auto const by_arr = by.array(mfi);
+            auto const ez_arr = ez.const_array(mfi);
+            auto const ex_arr = ex.const_array(mfi);
+            Box const& b = mfi.validbox();
+            for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
+                for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
+                    for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
+                        by_arr(i,j,k) += c.dtd2 * ((ez_arr(i+1,j,k) - ez_arr(i,j,k)) * c.inv_dx -
+                                                   (ex_arr(i,j,k+1) - ex_arr(i,j,k)) * c.inv_dz);
+                    }
+                }
+            }
+        }
+    }
+
+    void step_bz (MultiFab& bz, MultiFab const& ex, MultiFab const& ey, AdiCoeffs const& c)
+    {
+        for (MFIter mfi(bz); mfi.isValid(); ++mfi) {
+            auto const bz_arr = bz.array(mfi);
+            auto const ex_arr = ex.const_array(mfi);
+            auto const ey_arr = ey.const_array(mfi);
+            Box const& b = mfi.validbox();
+            for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
+                for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
+                    for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
+                        bz_arr(i,j,k) += c.dtd2 * ((ex_arr(i,j+1,k) - ex_arr(i,j,k)) * c.inv_dy -
+                                                   (ey_arr(i+1,j,k) - ey_arr(i,j,k)) * c.inv_dx);
+                    }
+                }
+            }
+        }
+    }
+
+    void adi_first_half_step (
+        std::array<std::unique_ptr<MultiFab>, 3>& Efield,
+        std::array<std::unique_ptr<MultiFab>, 3>& Bfield,
+        AdiCoeffs const& c,
+        Periodicity const& periodicity)
+    {
+        // Implicit E along y,z,x; explicit B at n+1/2.
+        MultiFab Ex0 = make_copy(*Efield[0]);
+        MultiFab Ey0 = make_copy(*Efield[1]);
+        MultiFab Ez0 = make_copy(*Efield[2]);
+
+        MultiFab rhs_ex = build_rhs_ex1(Ex0, Ey0, *Bfield[1], *Bfield[2], c);
+        MultiFab rhs_ey = build_rhs_ey1(Ey0, Ez0, *Bfield[0], *Bfield[2], c);
+        MultiFab rhs_ez = build_rhs_ez1(Ez0, Ex0, *Bfield[0], *Bfield[1], c);
+
+        solve_implicit_ex1(*Efield[0], rhs_ex, c);
+        solve_implicit_ey1(*Efield[1], rhs_ey, c);
+        solve_implicit_ez1(*Efield[2], rhs_ez, c);
+
+        fill_periodic(Efield, periodicity);
+
+        step_bx(*Bfield[0], *Efield[1], Ez0, c);
+        step_by(*Bfield[1], *Efield[2], Ex0, c);
+        step_bz(*Bfield[2], *Efield[0], Ey0, c);
+
+        fill_periodic(Bfield, periodicity);
+    }
+
+    void adi_second_half_step (
+        std::array<std::unique_ptr<MultiFab>, 3>& Efield,
+        std::array<std::unique_ptr<MultiFab>, 3>& Bfield,
+        AdiCoeffs const& c,
+        Periodicity const& periodicity)
+    {
+        // Implicit E along z,x,y; explicit B at n+1.
+        MultiFab Exh = make_copy(*Efield[0]);
+        MultiFab Eyh = make_copy(*Efield[1]);
+        MultiFab Ezh = make_copy(*Efield[2]);
+        std::array<MultiFab*, 3> Eh = {&Exh, &Eyh, &Ezh};
+        fill_periodic(Eh, periodicity);
+
+        MultiFab rhs_ex = build_rhs_ex2(Exh, Ezh, *Bfield[1], *Bfield[2], c);
+        MultiFab rhs_ey = build_rhs_ey2(Eyh, Exh, *Bfield[0], *Bfield[2], c);
+        MultiFab rhs_ez = build_rhs_ez2(Ezh, Eyh, *Bfield[0], *Bfield[1], c);
+
+        solve_implicit_ex2(*Efield[0], rhs_ex, c);
+        solve_implicit_ey2(*Efield[1], rhs_ey, c);
+        solve_implicit_ez2(*Efield[2], rhs_ez, c);
+
+        fill_periodic(Efield, periodicity);
+
+        step_bx(*Bfield[0], Eyh, *Efield[2], c);
+        step_by(*Bfield[1], Ezh, *Efield[0], c);
+        step_bz(*Bfield[2], Exh, *Efield[1], c);
+
+        fill_periodic(Bfield, periodicity);
+    }
 }
 
 void
@@ -196,241 +535,28 @@ FiniteDifferenceSolver::MacroscopicEvolveADI (
     Real const dx = 1._rt / m_h_stencil_coefs_x[0];
     Real const dy = 1._rt / m_h_stencil_coefs_y[0];
     Real const dz = 1._rt / m_h_stencil_coefs_z[0];
-    Real const c = PhysConst::c;
-    Real const dtd2 = 0.5_rt * dt;
-    Real const inv_dx = 1._rt / dx;
-    Real const inv_dy = 1._rt / dy;
-    Real const inv_dz = 1._rt / dz;
-    Real const cx = 4._rt * dx * dx / (c * c * dt * dt);
-    Real const cy = 4._rt * dy * dy / (c * c * dt * dt);
-    Real const cz = 4._rt * dz * dz / (c * c * dt * dt);
-    Real const diag_x = 2._rt + cx;
-    Real const diag_y = 2._rt + cy;
-    Real const diag_z = 2._rt + cz;
+    Real const c0 = PhysConst::c;
+
+    AdiCoeffs c;
+    c.dx = dx;
+    c.dy = dy;
+    c.dz = dz;
+    c.inv_dx = 1._rt / dx;
+    c.inv_dy = 1._rt / dy;
+    c.inv_dz = 1._rt / dz;
+    c.dt = dt;
+    c.dtd2 = 0.5_rt * dt;
+    c.cx = 4._rt * dx * dx / (c0 * c0 * dt * dt);
+    c.cy = 4._rt * dy * dy / (c0 * c0 * dt * dt);
+    c.cz = 4._rt * dz * dz / (c0 * c0 * dt * dt);
+    c.diag_x = 2._rt + c.cx;
+    c.diag_y = 2._rt + c.cy;
+    c.diag_z = 2._rt + c.cz;
 
     fill_periodic(Efield, periodicity);
     fill_periodic(Bfield, periodicity);
 
-    MultiFab Ex0 = make_copy(*Efield[0]);
-    MultiFab Ey0 = make_copy(*Efield[1]);
-    MultiFab Ez0 = make_copy(*Efield[2]);
-
-    MultiFab rhs_x = make_rhs(*Efield[0]);
-    MultiFab rhs_y = make_rhs(*Efield[1]);
-    MultiFab rhs_z = make_rhs(*Efield[2]);
-
-    for (MFIter mfi(rhs_x); mfi.isValid(); ++mfi) {
-        auto const rhs = rhs_x.array(mfi);
-        auto const ex = Ex0.const_array(mfi);
-        auto const ey = Ey0.const_array(mfi);
-        auto const by = Bfield[1]->const_array(mfi);
-        auto const bz = Bfield[2]->const_array(mfi);
-        Box const& bx = mfi.validbox();
-        for (int k = bx.smallEnd(2); k <= bx.bigEnd(2); ++k) {
-            for (int j = bx.smallEnd(1); j <= bx.bigEnd(1); ++j) {
-                for (int i = bx.smallEnd(0); i <= bx.bigEnd(0); ++i) {
-                    rhs(i,j,k) = cy * ex(i,j,k)
-                        + 2._rt * dy * dy / dt *
-                          ((bz(i,j,k) - bz(i,j-1,k)) * inv_dy -
-                           (by(i,j,k) - by(i,j,k-1)) * inv_dz)
-                        + dy * ((ey(i+1,j-1,k) - ey(i,j-1,k)) * inv_dx -
-                                (ey(i+1,j,k) - ey(i,j,k)) * inv_dx);
-                }
-            }
-        }
-    }
-    solve_periodic_lines(*Efield[0], rhs_x, 1, diag_y);
-
-    for (MFIter mfi(rhs_y); mfi.isValid(); ++mfi) {
-        auto const rhs = rhs_y.array(mfi);
-        auto const ey = Ey0.const_array(mfi);
-        auto const ez = Ez0.const_array(mfi);
-        auto const bx = Bfield[0]->const_array(mfi);
-        auto const bz = Bfield[2]->const_array(mfi);
-        Box const& b = mfi.validbox();
-        for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
-            for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
-                for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-                    rhs(i,j,k) = cz * ey(i,j,k)
-                        + 2._rt * dz * dz / dt *
-                          ((bx(i,j,k) - bx(i,j,k-1)) * inv_dz -
-                           (bz(i,j,k) - bz(i-1,j,k)) * inv_dx)
-                        + dz * ((ez(i,j+1,k-1) - ez(i,j,k-1)) * inv_dy -
-                                (ez(i,j+1,k) - ez(i,j,k)) * inv_dy);
-                }
-            }
-        }
-    }
-    solve_periodic_lines(*Efield[1], rhs_y, 2, diag_z);
-
-    for (MFIter mfi(rhs_z); mfi.isValid(); ++mfi) {
-        auto const rhs = rhs_z.array(mfi);
-        auto const ez = Ez0.const_array(mfi);
-        auto const ex = Ex0.const_array(mfi);
-        auto const bx = Bfield[0]->const_array(mfi);
-        auto const by = Bfield[1]->const_array(mfi);
-        Box const& b = mfi.validbox();
-        for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
-            for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
-                for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-                    rhs(i,j,k) = cx * ez(i,j,k)
-                        + 2._rt * dx * dx / dt *
-                          ((by(i,j,k) - by(i-1,j,k)) * inv_dx -
-                           (bx(i,j,k) - bx(i,j-1,k)) * inv_dy)
-                        + dx * ((ex(i-1,j,k+1) - ex(i-1,j,k)) * inv_dz -
-                                (ex(i,j,k+1) - ex(i,j,k)) * inv_dz);
-                }
-            }
-        }
-    }
-    solve_periodic_lines(*Efield[2], rhs_z, 0, diag_x);
-
-    fill_periodic(Efield, periodicity);
-
-    for (MFIter mfi(*Bfield[0]); mfi.isValid(); ++mfi) {
-        auto const bx = Bfield[0]->array(mfi);
-        auto const ey = Efield[1]->const_array(mfi);
-        auto const ez0 = Ez0.const_array(mfi);
-        Box const& b = mfi.validbox();
-        for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k)
-        for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j)
-        for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-            bx(i,j,k) += dtd2 * ((ey(i,j,k+1) - ey(i,j,k)) * inv_dz -
-                                 (ez0(i,j+1,k) - ez0(i,j,k)) * inv_dy);
-        }
-    }
-    for (MFIter mfi(*Bfield[1]); mfi.isValid(); ++mfi) {
-        auto const by = Bfield[1]->array(mfi);
-        auto const ez = Efield[2]->const_array(mfi);
-        auto const ex0 = Ex0.const_array(mfi);
-        Box const& b = mfi.validbox();
-        for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k)
-        for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j)
-        for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-            by(i,j,k) += dtd2 * ((ez(i+1,j,k) - ez(i,j,k)) * inv_dx -
-                                 (ex0(i,j,k+1) - ex0(i,j,k)) * inv_dz);
-        }
-    }
-    for (MFIter mfi(*Bfield[2]); mfi.isValid(); ++mfi) {
-        auto const bz = Bfield[2]->array(mfi);
-        auto const ex = Efield[0]->const_array(mfi);
-        auto const ey0 = Ey0.const_array(mfi);
-        Box const& b = mfi.validbox();
-        for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k)
-        for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j)
-        for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-            bz(i,j,k) += dtd2 * ((ex(i,j+1,k) - ex(i,j,k)) * inv_dy -
-                                 (ey0(i+1,j,k) - ey0(i,j,k)) * inv_dx);
-        }
-    }
-
-    fill_periodic(Bfield, periodicity);
-
-    MultiFab Exh = make_copy(*Efield[0]);
-    MultiFab Eyh = make_copy(*Efield[1]);
-    MultiFab Ezh = make_copy(*Efield[2]);
-    std::array<MultiFab*, 3> Eh = {&Exh, &Eyh, &Ezh};
-    fill_periodic(Eh, periodicity);
-
-    for (MFIter mfi(rhs_x); mfi.isValid(); ++mfi) {
-        auto const rhs = rhs_x.array(mfi);
-        auto const ex = Exh.const_array(mfi);
-        auto const ez = Ezh.const_array(mfi);
-        auto const by = Bfield[1]->const_array(mfi);
-        auto const bz = Bfield[2]->const_array(mfi);
-        Box const& b = mfi.validbox();
-        for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k)
-        for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j)
-        for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-            rhs(i,j,k) = cz * ex(i,j,k)
-                + 2._rt * dz * dz / dt *
-                  ((bz(i,j,k) - bz(i,j-1,k)) * inv_dy -
-                   (by(i,j,k) - by(i,j,k-1)) * inv_dz)
-                + dz * ((ez(i+1,j,k-1) - ez(i,j,k-1)) * inv_dx -
-                        (ez(i+1,j,k) - ez(i,j,k)) * inv_dx);
-        }
-    }
-    solve_periodic_lines(*Efield[0], rhs_x, 2, diag_z);
-
-    for (MFIter mfi(rhs_y); mfi.isValid(); ++mfi) {
-        auto const rhs = rhs_y.array(mfi);
-        auto const ey = Eyh.const_array(mfi);
-        auto const ex = Exh.const_array(mfi);
-        auto const bx = Bfield[0]->const_array(mfi);
-        auto const bz = Bfield[2]->const_array(mfi);
-        Box const& b = mfi.validbox();
-        for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k)
-        for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j)
-        for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-            rhs(i,j,k) = cx * ey(i,j,k)
-                + 2._rt * dx * dx / dt *
-                  ((bx(i,j,k) - bx(i,j,k-1)) * inv_dz -
-                   (bz(i,j,k) - bz(i-1,j,k)) * inv_dx)
-                + dx * ((ex(i-1,j+1,k) - ex(i-1,j,k)) * inv_dy -
-                        (ex(i,j+1,k) - ex(i,j,k)) * inv_dy);
-        }
-    }
-    solve_periodic_lines(*Efield[1], rhs_y, 0, diag_x);
-
-    for (MFIter mfi(rhs_z); mfi.isValid(); ++mfi) {
-        auto const rhs = rhs_z.array(mfi);
-        auto const ez = Ezh.const_array(mfi);
-        auto const ey = Eyh.const_array(mfi);
-        auto const bx = Bfield[0]->const_array(mfi);
-        auto const by = Bfield[1]->const_array(mfi);
-        Box const& b = mfi.validbox();
-        for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k)
-        for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j)
-        for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-            rhs(i,j,k) = cy * ez(i,j,k)
-                + 2._rt * dy * dy / dt *
-                  ((by(i,j,k) - by(i-1,j,k)) * inv_dx -
-                   (bx(i,j,k) - bx(i,j-1,k)) * inv_dy)
-                + dy * ((ey(i,j-1,k+1) - ey(i,j-1,k)) * inv_dz -
-                        (ey(i,j,k+1) - ey(i,j,k)) * inv_dz);
-        }
-    }
-    solve_periodic_lines(*Efield[2], rhs_z, 1, diag_y);
-
-    fill_periodic(Efield, periodicity);
-
-    for (MFIter mfi(*Bfield[0]); mfi.isValid(); ++mfi) {
-        auto const bx = Bfield[0]->array(mfi);
-        auto const eyh = Eyh.const_array(mfi);
-        auto const ez = Efield[2]->const_array(mfi);
-        Box const& b = mfi.validbox();
-        for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k)
-        for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j)
-        for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-            bx(i,j,k) += dtd2 * ((eyh(i,j,k+1) - eyh(i,j,k)) * inv_dz -
-                                 (ez(i,j+1,k) - ez(i,j,k)) * inv_dy);
-        }
-    }
-    for (MFIter mfi(*Bfield[1]); mfi.isValid(); ++mfi) {
-        auto const by = Bfield[1]->array(mfi);
-        auto const ezh = Ezh.const_array(mfi);
-        auto const ex = Efield[0]->const_array(mfi);
-        Box const& b = mfi.validbox();
-        for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k)
-        for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j)
-        for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-            by(i,j,k) += dtd2 * ((ezh(i+1,j,k) - ezh(i,j,k)) * inv_dx -
-                                 (ex(i,j,k+1) - ex(i,j,k)) * inv_dz);
-        }
-    }
-    for (MFIter mfi(*Bfield[2]); mfi.isValid(); ++mfi) {
-        auto const bz = Bfield[2]->array(mfi);
-        auto const exh = Exh.const_array(mfi);
-        auto const ey = Efield[1]->const_array(mfi);
-        Box const& b = mfi.validbox();
-        for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k)
-        for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j)
-        for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-            bz(i,j,k) += dtd2 * ((exh(i,j+1,k) - exh(i,j,k)) * inv_dy -
-                                 (ey(i+1,j,k) - ey(i,j,k)) * inv_dx);
-        }
-    }
-
-    fill_periodic(Bfield, periodicity);
+    adi_first_half_step(Efield, Bfield, c, periodicity);
+    adi_second_half_step(Efield, Bfield, c, periodicity);
 #endif
 }
