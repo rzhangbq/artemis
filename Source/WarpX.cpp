@@ -204,6 +204,7 @@ bool WarpX::do_dive_cleaning = false;
 bool WarpX::do_divb_cleaning = false;
 int WarpX::em_solver_medium;
 int WarpX::macroscopic_solver_algo;
+int WarpX::macroscopic_time_integrator_algo;
 bool WarpX::do_single_precision_comms = false;
 
 bool WarpX::do_shared_mem_charge_deposition = false;
@@ -1258,6 +1259,7 @@ WarpX::ReadParameters ()
 
         em_solver_medium = GetAlgorithmInteger(pp_algo, "em_solver_medium");
         if (em_solver_medium == MediumForEM::Macroscopic ) {
+            macroscopic_time_integrator_algo = GetAlgorithmInteger(pp_algo,"time_stepping_scheme");
             macroscopic_solver_algo = GetAlgorithmInteger(pp_algo,"macroscopic_sigma_method");
         }
         // Read field excitation flags and parsers

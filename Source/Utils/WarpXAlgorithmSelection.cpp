@@ -105,8 +105,13 @@ const std::map<std::string, int> MaxwellSolver_medium_algo_to_int = {
 const std::map<std::string, int> MacroscopicSolver_algo_to_int = {
     {"backwardeuler", MacroscopicSolverAlgo::BackwardEuler},
     {"laxwendroff", MacroscopicSolverAlgo::LaxWendroff},
-    {"adi", MacroscopicSolverAlgo::ADI},
     {"default", MacroscopicSolverAlgo::BackwardEuler}
+};
+
+const std::map<std::string, int> MacroscopicTimeIntegrator_algo_to_int = {
+    {"fdtd", MacroscopicTimeIntegratorAlgo::FDTD},
+    {"adi", MacroscopicTimeIntegratorAlgo::ADI},
+    {"default", MacroscopicTimeIntegratorAlgo::FDTD}
 };
 
 const std::map<std::string, int> FieldBCType_algo_to_int = {
@@ -185,6 +190,8 @@ GetAlgorithmInteger( amrex::ParmParse& pp, const char* pp_search_key ){
         algo_to_int = MaxwellSolver_medium_algo_to_int;
     } else if (0 == std::strcmp(pp_search_key, "macroscopic_sigma_method")) {
         algo_to_int = MacroscopicSolver_algo_to_int;
+    } else if (0 == std::strcmp(pp_search_key, "time_stepping_scheme")) {
+        algo_to_int = MacroscopicTimeIntegrator_algo_to_int;
     } else if (0 == std::strcmp(pp_search_key, "reduction_type")) {
         algo_to_int = ReductionType_algo_to_int;
     } else if (0 == std::strcmp(pp_search_key, "integration_type")) {

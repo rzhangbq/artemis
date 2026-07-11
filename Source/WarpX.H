@@ -296,6 +296,10 @@ public:
      *  (BackwardEuler - 0, Lax-Wendroff - 1)
      */
     static int macroscopic_solver_algo;
+    /** Integer that corresponds to macroscopic EM time integrator
+     *  (FDTD - 0, ADI - 1)
+     */
+    static int macroscopic_time_integrator_algo;
     /** Integers that correspond to boundary condition applied to fields at the
      *  lower domain boundaries
      *  (0 to 6 correspond to PML, Periodic, PEC, PMC, Damped, Absorbing Silver-Mueller, None)

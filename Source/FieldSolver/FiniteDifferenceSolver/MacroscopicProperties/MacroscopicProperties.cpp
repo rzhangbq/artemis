@@ -244,7 +244,6 @@ MacroscopicProperties::ReadParameters ()
 void
 MacroscopicProperties::InitData ()
 {
-    amrex::Print() << Utils::TextMsg::Info("we are in init data of macro");
     auto & warpx = WarpX::GetInstance();
     // Get BoxArray and DistributionMap of warpx instance.
     int lev = 0;

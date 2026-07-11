@@ -487,7 +487,7 @@ WarpX::OneStep_nosub (Real cur_time)
         FillBoundaryF(guard_cells.ng_FieldSolverF);
         FillBoundaryG(guard_cells.ng_FieldSolverG);
         if (WarpX::em_solver_medium == MediumForEM::Macroscopic &&
-            WarpX::macroscopic_solver_algo == MacroscopicSolverAlgo::ADI) {
+            WarpX::macroscopic_time_integrator_algo == MacroscopicTimeIntegratorAlgo::ADI) {
 #ifdef WARPX_MAG_LLG
             WARPX_ABORT_WITH_MESSAGE("Macroscopic ADI is not implemented with WARPX_MAG_LLG.");
 #else

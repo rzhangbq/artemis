@@ -46,8 +46,17 @@ struct LumpedInductor {
 struct MacroscopicSolverAlgo {
     enum {
         BackwardEuler = 0,
-        LaxWendroff = 1,
-        ADI = 2
+        LaxWendroff = 1
+    };
+};
+
+/**
+  * \brief struct to select the macroscopic electromagnetic time integrator.
+  */
+struct MacroscopicTimeIntegratorAlgo {
+    enum {
+        FDTD = 0,
+        ADI = 1
     };
 };
 

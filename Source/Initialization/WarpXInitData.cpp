@@ -185,12 +185,20 @@ WarpX::PrintMainPICparameters ()
       amrex::Print() << "                      | - macroscopic" << "\n";
     }
     if ( (em_solver_medium == MediumForEM::Macroscopic) &&
+       (WarpX::macroscopic_time_integrator_algo == MacroscopicTimeIntegratorAlgo::FDTD)){
+      amrex::Print() << "                      |  - FDTD time integrator\n";
+      }
+    else if ((em_solver_medium == MediumForEM::Macroscopic) &&
+            (WarpX::macroscopic_time_integrator_algo == MacroscopicTimeIntegratorAlgo::ADI)){
+      amrex::Print() << "                      |  - ADI time integrator\n";
+      }
+    if ( (em_solver_medium == MediumForEM::Macroscopic) &&
        (WarpX::macroscopic_solver_algo == MacroscopicSolverAlgo::LaxWendroff)){
-      amrex::Print() << "                      |  - Lax-Wendroff algorithm\n";
+      amrex::Print() << "                      |  - Lax-Wendroff sigma method\n";
       }
     else if ((em_solver_medium == MediumForEM::Macroscopic) &&
             (WarpX::macroscopic_solver_algo == MacroscopicSolverAlgo::BackwardEuler)){
-      amrex::Print() << "                      |  - Backward Euler algorithm\n";
+      amrex::Print() << "                      |  - Backward Euler sigma method\n";
       }
     amrex::Print() << "-------------------------------------------------------------------------------\n";
     // Print type of current deposition

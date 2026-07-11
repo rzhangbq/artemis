@@ -21,7 +21,9 @@ warpx.cfl = 5
 
 algo.em_solver_medium = macroscopic # vacuum/macroscopic
 
-algo.macroscopic_sigma_method = adi # adi, laxwendroff, or backwardeuler
+algo.time_stepping_scheme = adi # fdtd or adi
+
+algo.macroscopic_sigma_method = laxwendroff # laxwendroff or backwardeuler
 
 macroscopic.sigma_function(x,y,z) = "sigma_0"
 
