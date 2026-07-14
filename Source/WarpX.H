@@ -296,6 +296,10 @@ public:
      *  (BackwardEuler - 0, Lax-Wendroff - 1)
      */
     static int macroscopic_solver_algo;
+    /** Integer that corresponds to macroscopic EM time stepping
+     *  (FDTD - 0, ADI - 1)
+     */
+    static int macroscopic_time_integrator_algo;
     /** Integers that correspond to boundary condition applied to fields at the
      *  lower domain boundaries
      *  (0 to 6 correspond to PML, Periodic, PEC, PMC, Damped, Absorbing Silver-Mueller, None)
@@ -814,6 +818,9 @@ public:
     void MacroscopicEvolveE (         amrex::Real dt);
     void MacroscopicEvolveE (int lev, amrex::Real dt);
     void MacroscopicEvolveE (int lev, PatchType patch_type, amrex::Real dt);
+    void MacroscopicEvolveADI (         amrex::Real dt);
+    void MacroscopicEvolveADI (int lev, amrex::Real dt);
+    void MacroscopicEvolveADI (int lev, PatchType patch_type, amrex::Real dt);
 
 #ifdef WARPX_MAG_LLG
     void MacroscopicEvolveHM (         amrex::Real dt);
@@ -1608,6 +1615,11 @@ private:
     amrex::Vector<std::array< std::unique_ptr<amrex::MultiFab>, 3 > > Efield_fp;
     amrex::Vector<std::array< std::unique_ptr<amrex::MultiFab>, 3 > > PEC_fp;
     amrex::Vector<std::array< std::unique_ptr<amrex::MultiFab>, 3 > > Bfield_fp;
+    // ADI work fields on x-, y-, and z-directed pencil decompositions.
+    amrex::Vector<std::array<
+        std::array<std::unique_ptr<amrex::MultiFab>, 3>, 3>> Efield_fp_adi;
+    amrex::Vector<std::array<
+        std::array<std::unique_ptr<amrex::MultiFab>, 3>, 3>> Bfield_fp_adi;
 #ifdef WARPX_MAG_LLG
     amrex::Vector<std::array< std::unique_ptr<amrex::MultiFab>, 3 > > Mfield_fp;
     amrex::Vector<std::array< std::unique_ptr<amrex::MultiFab>, 3 > > Hfield_fp;
