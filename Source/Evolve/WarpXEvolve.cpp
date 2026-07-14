@@ -492,10 +492,6 @@ WarpX::OneStep_nosub (Real cur_time)
             WARPX_ABORT_WITH_MESSAGE("Macroscopic ADI is not implemented with WARPX_MAG_LLG.");
 #else
             MacroscopicEvolveADI(dt[0]); // We now have E^{n+1} and B^{n+1}
-            FillBoundaryE(guard_cells.ng_FieldSolver, WarpX::sync_nodal_points);
-            FillBoundaryB(guard_cells.ng_FieldSolver, WarpX::sync_nodal_points);
-            ApplyExternalFieldExcitationOnGrid(ExternalFieldType::EfieldExternal);
-            ApplyExternalFieldExcitationOnGrid(ExternalFieldType::BfieldExternal, DtType::SecondHalf);
 #endif
         } else {
 #ifndef WARPX_MAG_LLG

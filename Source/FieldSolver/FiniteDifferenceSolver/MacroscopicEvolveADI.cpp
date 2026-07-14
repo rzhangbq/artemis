@@ -1054,8 +1054,25 @@ FiniteDifferenceSolver::MacroscopicEvolveADI (
     update_material_coeffs(mat, Bfield, dt, periodicity, macroscopic_properties);
     adi_first_half_step(
         Efield, Bfield, Efield_adi, Bfield_adi, c, mat, periodicity, pec);
+
+    // Soft sources use factor 0.5 on FirstHalf/SecondHalf so both halves total one Full.
+    WarpX& warpx = WarpX::GetInstance();
+    warpx.FillBoundaryE(warpx.getngEB());
+    warpx.FillBoundaryB(warpx.getngEB());
+    warpx.ApplyExternalFieldExcitationOnGrid(
+        ExternalFieldType::EfieldExternal, DtType::FirstHalf);
+    warpx.ApplyExternalFieldExcitationOnGrid(
+        ExternalFieldType::BfieldExternal, DtType::FirstHalf);
+
     update_material_coeffs(mat, Bfield, dt, periodicity, macroscopic_properties);
     adi_second_half_step(
         Efield, Bfield, Efield_adi, Bfield_adi, c, mat, periodicity, pec);
+
+    warpx.FillBoundaryE(warpx.getngEB());
+    warpx.FillBoundaryB(warpx.getngEB());
+    warpx.ApplyExternalFieldExcitationOnGrid(
+        ExternalFieldType::EfieldExternal, DtType::SecondHalf);
+    warpx.ApplyExternalFieldExcitationOnGrid(
+        ExternalFieldType::BfieldExternal, DtType::SecondHalf);
 #endif
 }
