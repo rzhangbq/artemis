@@ -54,10 +54,10 @@ macroscopic.epsilon_function(x,y,z) = "(EPR - 1) * 8.8541878128e-12 * (abs(x+len
 # 5. change x layer to z layer
 # max EPR <= 100; min EPR = 1
 warpx.E_excitation_on_grid_style = "parse_E_excitation_grid_function"
-warpx.Ex_excitation_grid_function(x,y,z,t) = "1.25663706212e-06 * (exp(-(t-3*TP)**2/(2*TP**2))*cos(2*pi*c/wavelength*t)) * (x <= + rjx - length/6) * (x >= - rjx - length/6) * (z <= + rjz - length/6) * (z >= - rjz - length/6)"
+warpx.Ex_excitation_grid_function(x,y,z,t) = "1.25663706212e-06 * (exp(-(t-3*TP)**2/(2*TP**2))*cos(2*pi*c/wavelength*t)) * (x <= + rjx) * (x >= - rjx) * (z <= + rjz) * (z >= - rjz)"
 warpx.Ey_excitation_grid_function(x,y,z,t) = "0.0"
 warpx.Ez_excitation_grid_function(x,y,z,t) = "0.0"
-warpx.Ex_excitation_flag_function(x,y,z) = "flag_ss * (x <= + rjx - length/6) * (x >= - rjx - length/6) * (z <= + rjz - length/6) * (z >= - rjz - length/6)"
+warpx.Ex_excitation_flag_function(x,y,z) = "flag_ss * (x <= + rjx) * (x >= - rjx) * (z <= + rjz) * (z >= - rjz)"
 warpx.Ey_excitation_flag_function(x,y,z) = "flag_none"
 warpx.Ez_excitation_flag_function(x,y,z) = "flag_none"
 # source sweep
@@ -66,10 +66,10 @@ warpx.Ez_excitation_flag_function(x,y,z) = "flag_none"
 # 3. sweep wavelength
 warpx.B_excitation_on_grid_style = "parse_B_excitation_grid_function"
 warpx.Bx_excitation_grid_function(x,y,z,t) = "0.0"
-warpx.By_excitation_grid_function(x,y,z,t) = "(exp(-(t-3*TP)**2/(2*TP**2))*cos(2*pi*c/wavelength*t)) * (x <= + rjx - length/6) * (x >= - rjx - length/6) * (z <= + rjz - length/6) * (z >= - rjz - length/6)"
+warpx.By_excitation_grid_function(x,y,z,t) = "(exp(-(t-3*TP)**2/(2*TP**2))*cos(2*pi*c/wavelength*t)) * (x <= + rjx) * (x >= - rjx) * (z <= + rjz) * (z >= - rjz)"
 warpx.Bz_excitation_grid_function(x,y,z,t) = "0.0"
 warpx.Bx_excitation_flag_function(x,y,z) = "flag_none"
-warpx.By_excitation_flag_function(x,y,z) = "flag_ss * (x <= + rjx - length/6) * (x >= - rjx - length/6) * (z <= + rjz - length/6) * (z >= - rjz - length/6)"
+warpx.By_excitation_flag_function(x,y,z) = "flag_ss * (x <= + rjx) * (x >= - rjx) * (z <= + rjz) * (z >= - rjz)"
 warpx.Bz_excitation_flag_function(x,y,z) = "flag_none"
 diagnostics.diags_names = plt
 plt.intervals = 20
