@@ -337,12 +337,41 @@ namespace
         }
     }
 
+    bool pec_mask_touches_wall (int normal)
+    {
+        if (!WarpX::use_PEC_mask) { return false; }
+
+        WarpX& warpx = WarpX::GetInstance();
+        for (int comp = 0; comp < 3; ++comp) {
+            MultiFab const* mask = warpx.get_pointer_PEC_fp(0, comp);
+            if (mask == nullptr || mask->ixType().cellCentered(normal)) {
+                continue;
+            }
+
+            Box const bounds = mask->boxArray().minimalBox();
+            Box const lo_wall =
+                amrex::makeSlab(bounds, normal, bounds.smallEnd(normal));
+            Box const hi_wall =
+                amrex::makeSlab(bounds, normal, bounds.bigEnd(normal));
+            if (mask->min(lo_wall, 0) == 0._rt ||
+                mask->min(hi_wall, 0) == 0._rt)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     PecConfig get_pec_config (Periodicity const& periodicity)
     {
         PecConfig pec;
         for (int dir = 0; dir < 3; ++dir) {
             bool const lo_pec = WarpX::field_boundary_lo[dir] == FieldBoundaryType::PEC;
             bool const hi_pec = WarpX::field_boundary_hi[dir] == FieldBoundaryType::PEC;
+            WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+                !pec_mask_touches_wall(dir) || (lo_pec && hi_pec),
+                "A PEC mask touches a domain wall. Macroscopic ADI requires both "
+                "field boundaries normal to that wall to be PEC.");
             if (lo_pec || hi_pec) {
                 WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
                     lo_pec && hi_pec,
