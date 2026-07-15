@@ -1189,6 +1189,7 @@ FiniteDifferenceSolver::MacroscopicEvolveADI (
     warpx.FillBoundaryB(warpx.getngEB());
     warpx.ApplyExternalFieldExcitationOnGrid(
         ExternalFieldType::EfieldExternal, DtType::FirstHalf);
+    apply_pec_mask(Efield);
     warpx.ApplyExternalFieldExcitationOnGrid(
         ExternalFieldType::BfieldExternal, DtType::FirstHalf);
 
@@ -1200,6 +1201,7 @@ FiniteDifferenceSolver::MacroscopicEvolveADI (
     warpx.FillBoundaryB(warpx.getngEB());
     warpx.ApplyExternalFieldExcitationOnGrid(
         ExternalFieldType::EfieldExternal, DtType::SecondHalf);
+    apply_pec_mask(Efield);
     warpx.ApplyExternalFieldExcitationOnGrid(
         ExternalFieldType::BfieldExternal, DtType::SecondHalf);
 #endif
