@@ -337,41 +337,12 @@ namespace
         }
     }
 
-    bool pec_mask_touches_wall (int normal)
-    {
-        if (!WarpX::use_PEC_mask) { return false; }
-
-        WarpX& warpx = WarpX::GetInstance();
-        for (int comp = 0; comp < 3; ++comp) {
-            MultiFab const* mask = warpx.get_pointer_PEC_fp(0, comp);
-            if (mask == nullptr || mask->ixType().cellCentered(normal)) {
-                continue;
-            }
-
-            Box const bounds = mask->boxArray().minimalBox();
-            Box const lo_wall =
-                amrex::makeSlab(bounds, normal, bounds.smallEnd(normal));
-            Box const hi_wall =
-                amrex::makeSlab(bounds, normal, bounds.bigEnd(normal));
-            if (mask->min(lo_wall, 0) == 0._rt ||
-                mask->min(hi_wall, 0) == 0._rt)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
     PecConfig get_pec_config (Periodicity const& periodicity)
     {
         PecConfig pec;
         for (int dir = 0; dir < 3; ++dir) {
             bool const lo_pec = WarpX::field_boundary_lo[dir] == FieldBoundaryType::PEC;
             bool const hi_pec = WarpX::field_boundary_hi[dir] == FieldBoundaryType::PEC;
-            WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
-                !pec_mask_touches_wall(dir) || (lo_pec && hi_pec),
-                "A PEC mask touches a domain wall. Macroscopic ADI requires both "
-                "field boundaries normal to that wall to be PEC.");
             if (lo_pec || hi_pec) {
                 WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
                     lo_pec && hi_pec,
@@ -407,30 +378,6 @@ namespace
         } else {
             solve_periodic_lines(field, rhs, Cb, Db, solve_dir, inv_d2, pec_mask);
         }
-    }
-
-    // Remap PEC_fp[comp] onto the ADI pencil BoxArray used by field.
-    MultiFab make_pec_mask_on_pencil (
-        MultiFab const& field, int e_comp, Periodicity const& periodicity)
-    {
-        MultiFab pec_on_pencil(field.boxArray(), field.DistributionMap(), 1, 0);
-        WarpX& warpx = WarpX::GetInstance();
-        MultiFab const* pec_src = warpx.get_pointer_PEC_fp(0, e_comp);
-        WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
-            pec_src != nullptr,
-            "algo.use_PEC_mask=1 requires PEC_fp for ADI mask pinning.");
-        pec_on_pencil.ParallelCopy(
-            *pec_src, 0, 0, 1, IntVect(0), IntVect(0), periodicity);
-        return pec_on_pencil;
-    }
-
-    MultiFab const* optional_pec_mask (
-        MultiFab& pec_storage, MultiFab const& field, int e_comp,
-        Periodicity const& periodicity)
-    {
-        if (!WarpX::use_PEC_mask) { return nullptr; }
-        pec_storage = make_pec_mask_on_pencil(field, e_comp, periodicity);
-        return &pec_storage;
     }
 
     // Zero E on interior conductor edges marked by PEC_fp (mask value 0).
@@ -893,84 +840,84 @@ namespace
 
     void solve_implicit_ex1 (MultiFab& ex, MultiFab const& rhs,
                              AdiCoeffs const& c, AdiMaterialCoeffs const& mat,
-                             Periodicity const& periodicity, PecConfig const& pec)
+                             Periodicity const& periodicity, PecConfig const& pec,
+                             AdiFieldArray const& pec_masks)
     {
         MultiFab Cb = make_rhs(ex);
         MultiFab Db = make_coeff_like(ex, *mat.Db[2]);
         copy_coeff_to_layout(Cb, *mat.Cb[0], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[2], periodicity);
-        MultiFab pec_storage;
-        MultiFab const* pec_mask = optional_pec_mask(pec_storage, ex, 0, periodicity);
+        MultiFab const* pec_mask = pec_masks[1][0].get();
         solve_implicit_component(ex, rhs, Cb, Db,
                                  0, 1, c.inv_dy * c.inv_dy, pec, pec_mask);
     }
 
     void solve_implicit_ey1 (MultiFab& ey, MultiFab const& rhs,
                              AdiCoeffs const& c, AdiMaterialCoeffs const& mat,
-                             Periodicity const& periodicity, PecConfig const& pec)
+                             Periodicity const& periodicity, PecConfig const& pec,
+                             AdiFieldArray const& pec_masks)
     {
         MultiFab Cb = make_rhs(ey);
         MultiFab Db = make_coeff_like(ey, *mat.Db[0]);
         copy_coeff_to_layout(Cb, *mat.Cb[1], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[0], periodicity);
-        MultiFab pec_storage;
-        MultiFab const* pec_mask = optional_pec_mask(pec_storage, ey, 1, periodicity);
+        MultiFab const* pec_mask = pec_masks[2][1].get();
         solve_implicit_component(ey, rhs, Cb, Db,
                                  1, 2, c.inv_dz * c.inv_dz, pec, pec_mask);
     }
 
     void solve_implicit_ez1 (MultiFab& ez, MultiFab const& rhs,
                              AdiCoeffs const& c, AdiMaterialCoeffs const& mat,
-                             Periodicity const& periodicity, PecConfig const& pec)
+                             Periodicity const& periodicity, PecConfig const& pec,
+                             AdiFieldArray const& pec_masks)
     {
         MultiFab Cb = make_rhs(ez);
         MultiFab Db = make_coeff_like(ez, *mat.Db[1]);
         copy_coeff_to_layout(Cb, *mat.Cb[2], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[1], periodicity);
-        MultiFab pec_storage;
-        MultiFab const* pec_mask = optional_pec_mask(pec_storage, ez, 2, periodicity);
+        MultiFab const* pec_mask = pec_masks[0][2].get();
         solve_implicit_component(ez, rhs, Cb, Db,
                                  2, 0, c.inv_dx * c.inv_dx, pec, pec_mask);
     }
 
     void solve_implicit_ex2 (MultiFab& ex, MultiFab const& rhs,
                              AdiCoeffs const& c, AdiMaterialCoeffs const& mat,
-                             Periodicity const& periodicity, PecConfig const& pec)
+                             Periodicity const& periodicity, PecConfig const& pec,
+                             AdiFieldArray const& pec_masks)
     {
         MultiFab Cb = make_rhs(ex);
         MultiFab Db = make_coeff_like(ex, *mat.Db[1]);
         copy_coeff_to_layout(Cb, *mat.Cb[0], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[1], periodicity);
-        MultiFab pec_storage;
-        MultiFab const* pec_mask = optional_pec_mask(pec_storage, ex, 0, periodicity);
+        MultiFab const* pec_mask = pec_masks[2][0].get();
         solve_implicit_component(ex, rhs, Cb, Db,
                                  0, 2, c.inv_dz * c.inv_dz, pec, pec_mask);
     }
 
     void solve_implicit_ey2 (MultiFab& ey, MultiFab const& rhs,
                              AdiCoeffs const& c, AdiMaterialCoeffs const& mat,
-                             Periodicity const& periodicity, PecConfig const& pec)
+                             Periodicity const& periodicity, PecConfig const& pec,
+                             AdiFieldArray const& pec_masks)
     {
         MultiFab Cb = make_rhs(ey);
         MultiFab Db = make_coeff_like(ey, *mat.Db[2]);
         copy_coeff_to_layout(Cb, *mat.Cb[1], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[2], periodicity);
-        MultiFab pec_storage;
-        MultiFab const* pec_mask = optional_pec_mask(pec_storage, ey, 1, periodicity);
+        MultiFab const* pec_mask = pec_masks[0][1].get();
         solve_implicit_component(ey, rhs, Cb, Db,
                                  1, 0, c.inv_dx * c.inv_dx, pec, pec_mask);
     }
 
     void solve_implicit_ez2 (MultiFab& ez, MultiFab const& rhs,
                              AdiCoeffs const& c, AdiMaterialCoeffs const& mat,
-                             Periodicity const& periodicity, PecConfig const& pec)
+                             Periodicity const& periodicity, PecConfig const& pec,
+                             AdiFieldArray const& pec_masks)
     {
         MultiFab Cb = make_rhs(ez);
         MultiFab Db = make_coeff_like(ez, *mat.Db[0]);
         copy_coeff_to_layout(Cb, *mat.Cb[2], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[0], periodicity);
-        MultiFab pec_storage;
-        MultiFab const* pec_mask = optional_pec_mask(pec_storage, ez, 2, periodicity);
+        MultiFab const* pec_mask = pec_masks[1][2].get();
         solve_implicit_component(ez, rhs, Cb, Db,
                                  2, 1, c.inv_dy * c.inv_dy, pec, pec_mask);
     }
@@ -1037,7 +984,8 @@ namespace
         AdiCoeffs const& c,
         AdiMaterialCoeffs const& mat,
         Periodicity const& periodicity,
-        PecConfig const& pec)
+        PecConfig const& pec,
+        AdiFieldArray const& pec_masks)
     {
         // Implicit E along y,z,x; explicit B at n+1/2.
         MultiFab Ex0 = make_copy(*Efield[0]);
@@ -1062,9 +1010,9 @@ namespace
             *Efield_adi[0][2], *Efield_adi[0][0],
             *Bfield_adi[0][0], *Bfield_adi[0][1], c, mat, periodicity);
 
-        solve_implicit_ex1(*Efield_adi[1][0], rhs_ex, c, mat, periodicity, pec);
-        solve_implicit_ey1(*Efield_adi[2][1], rhs_ey, c, mat, periodicity, pec);
-        solve_implicit_ez1(*Efield_adi[0][2], rhs_ez, c, mat, periodicity, pec);
+        solve_implicit_ex1(*Efield_adi[1][0], rhs_ex, c, mat, periodicity, pec, pec_masks);
+        solve_implicit_ey1(*Efield_adi[2][1], rhs_ey, c, mat, periodicity, pec, pec_masks);
+        solve_implicit_ez1(*Efield_adi[0][2], rhs_ez, c, mat, periodicity, pec, pec_masks);
 
         copy_field_component(Efield, Efield_adi[1], 0, periodicity);
         copy_field_component(Efield, Efield_adi[2], 1, periodicity);
@@ -1072,7 +1020,6 @@ namespace
 
         fill_periodic(Efield, periodicity);
         pin_pec_tangential_e(Efield, pec);
-        apply_pec_mask(Efield);
 
         step_bx(*Bfield[0], *Efield[1], Ez0, c);
         step_by(*Bfield[1], *Efield[2], Ex0, c);
@@ -1089,7 +1036,8 @@ namespace
         AdiCoeffs const& c,
         AdiMaterialCoeffs const& mat,
         Periodicity const& periodicity,
-        PecConfig const& pec)
+        PecConfig const& pec,
+        AdiFieldArray const& pec_masks)
     {
         // Implicit E along z,x,y; explicit B at n+1.
         MultiFab Exh = make_copy(*Efield[0]);
@@ -1116,9 +1064,9 @@ namespace
             *Efield_adi[1][2], *Efield_adi[1][1],
             *Bfield_adi[1][0], *Bfield_adi[1][1], c, mat, periodicity);
 
-        solve_implicit_ex2(*Efield_adi[2][0], rhs_ex, c, mat, periodicity, pec);
-        solve_implicit_ey2(*Efield_adi[0][1], rhs_ey, c, mat, periodicity, pec);
-        solve_implicit_ez2(*Efield_adi[1][2], rhs_ez, c, mat, periodicity, pec);
+        solve_implicit_ex2(*Efield_adi[2][0], rhs_ex, c, mat, periodicity, pec, pec_masks);
+        solve_implicit_ey2(*Efield_adi[0][1], rhs_ey, c, mat, periodicity, pec, pec_masks);
+        solve_implicit_ez2(*Efield_adi[1][2], rhs_ez, c, mat, periodicity, pec, pec_masks);
 
         copy_field_component(Efield, Efield_adi[2], 0, periodicity);
         copy_field_component(Efield, Efield_adi[0], 1, periodicity);
@@ -1126,7 +1074,6 @@ namespace
 
         fill_periodic(Efield, periodicity);
         pin_pec_tangential_e(Efield, pec);
-        apply_pec_mask(Efield);
 
         step_bx(*Bfield[0], Eyh, *Efield[2], c);
         step_by(*Bfield[1], Ezh, *Efield[0], c);
@@ -1142,13 +1089,14 @@ FiniteDifferenceSolver::MacroscopicEvolveADI (
     FieldArray& Bfield,
     AdiFieldArray& Efield_adi,
     AdiFieldArray& Bfield_adi,
+    AdiFieldArray const& PEC_adi,
     Real const dt,
     Periodicity const& periodicity,
     std::unique_ptr<MacroscopicProperties> const& macroscopic_properties)
 {
 #ifdef WARPX_DIM_RZ
     amrex::ignore_unused(
-        Efield, Bfield, Efield_adi, Bfield_adi, dt, periodicity,
+        Efield, Bfield, Efield_adi, Bfield_adi, PEC_adi, dt, periodicity,
         macroscopic_properties);
     WARPX_ABORT_WITH_MESSAGE("Macroscopic ADI is implemented only for 3D Cartesian grids.");
 #else
@@ -1174,6 +1122,8 @@ FiniteDifferenceSolver::MacroscopicEvolveADI (
     c.dt = dt;
     c.dtd2 = 0.5_rt * dt;
 
+    pin_pec_tangential_e(Efield, pec);
+    apply_pec_mask(Efield);
     fill_periodic(Efield, periodicity);
     fill_periodic(Bfield, periodicity);
 
@@ -1181,7 +1131,7 @@ FiniteDifferenceSolver::MacroscopicEvolveADI (
     define_material_coeffs(Efield, Bfield, mat);
     update_material_coeffs(mat, Bfield, dt, periodicity, macroscopic_properties);
     adi_first_half_step(
-        Efield, Bfield, Efield_adi, Bfield_adi, c, mat, periodicity, pec);
+        Efield, Bfield, Efield_adi, Bfield_adi, c, mat, periodicity, pec, PEC_adi);
 
     // Soft sources use factor 0.5 on FirstHalf/SecondHalf so both halves total one Full.
     WarpX& warpx = WarpX::GetInstance();
@@ -1189,18 +1139,20 @@ FiniteDifferenceSolver::MacroscopicEvolveADI (
     warpx.FillBoundaryB(warpx.getngEB());
     warpx.ApplyExternalFieldExcitationOnGrid(
         ExternalFieldType::EfieldExternal, DtType::FirstHalf);
+    pin_pec_tangential_e(Efield, pec);
     apply_pec_mask(Efield);
     warpx.ApplyExternalFieldExcitationOnGrid(
         ExternalFieldType::BfieldExternal, DtType::FirstHalf);
 
     update_material_coeffs(mat, Bfield, dt, periodicity, macroscopic_properties);
     adi_second_half_step(
-        Efield, Bfield, Efield_adi, Bfield_adi, c, mat, periodicity, pec);
+        Efield, Bfield, Efield_adi, Bfield_adi, c, mat, periodicity, pec, PEC_adi);
 
     warpx.FillBoundaryE(warpx.getngEB());
     warpx.FillBoundaryB(warpx.getngEB());
     warpx.ApplyExternalFieldExcitationOnGrid(
         ExternalFieldType::EfieldExternal, DtType::SecondHalf);
+    pin_pec_tangential_e(Efield, pec);
     apply_pec_mask(Efield);
     warpx.ApplyExternalFieldExcitationOnGrid(
         ExternalFieldType::BfieldExternal, DtType::SecondHalf);

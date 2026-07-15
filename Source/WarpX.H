@@ -1620,6 +1620,10 @@ private:
         std::array<std::unique_ptr<amrex::MultiFab>, 3>, 3>> Efield_fp_adi;
     amrex::Vector<std::array<
         std::array<std::unique_ptr<amrex::MultiFab>, 3>, 3>> Bfield_fp_adi;
+    // Static PEC masks remapped onto the six ADI E-field pencil layouts.
+    amrex::Vector<std::array<
+        std::array<std::unique_ptr<amrex::MultiFab>, 3>, 3>> PEC_fp_adi;
+    amrex::Vector<int> m_pec_fp_adi_initialized;
 #ifdef WARPX_MAG_LLG
     amrex::Vector<std::array< std::unique_ptr<amrex::MultiFab>, 3 > > Mfield_fp;
     amrex::Vector<std::array< std::unique_ptr<amrex::MultiFab>, 3 > > Hfield_fp;

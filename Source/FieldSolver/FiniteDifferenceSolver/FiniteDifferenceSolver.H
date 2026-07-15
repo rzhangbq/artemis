@@ -136,6 +136,7 @@ class FiniteDifferenceSolver
                             std::array< std::unique_ptr<amrex::MultiFab>, 3>& Bfield,
                             std::array< std::array<std::unique_ptr<amrex::MultiFab>, 3>, 3>& Efield_adi,
                             std::array< std::array<std::unique_ptr<amrex::MultiFab>, 3>, 3>& Bfield_adi,
+                            std::array< std::array<std::unique_ptr<amrex::MultiFab>, 3>, 3> const& PEC_adi,
                             amrex::Real const dt,
                             amrex::Periodicity const& periodicity,
                             std::unique_ptr<MacroscopicProperties> const& macroscopic_properties);

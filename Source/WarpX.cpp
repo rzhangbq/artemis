@@ -395,6 +395,8 @@ WarpX::WarpX ()
     {
         Efield_fp_adi.resize(nlevs_max);
         Bfield_fp_adi.resize(nlevs_max);
+        PEC_fp_adi.resize(nlevs_max);
+        m_pec_fp_adi_initialized.resize(nlevs_max, false);
     }
     Bfield_sc_fp.resize(nlevs_max);
 #ifdef WARPX_MAG_LLG
@@ -2016,7 +2018,9 @@ WarpX::ClearLevel (int lev)
             {
                 Efield_fp_adi[lev][solve_dir][i].reset();
                 Bfield_fp_adi[lev][solve_dir][i].reset();
+                PEC_fp_adi[lev][solve_dir][i].reset();
             }
+            m_pec_fp_adi_initialized[lev] = false;
         }
 #ifdef WARPX_MAG_LLG
         Mfield_fp [lev][i].reset();
@@ -2375,6 +2379,14 @@ WarpX::AllocLevelMFs (int lev, const BoxArray& ba, const DistributionMapping& dm
                     amrex::convert(pencil_ba[solve_dir], b_nodal_flags[component]),
                     pencil_dm[solve_dir], ncomps, ngEB,
                     tag("Bfield_fp_adi[" + dir + "][" + comp + "]"));
+                if (use_PEC_mask && component != solve_dir)
+                {
+                    AllocInitMultiFab(
+                        PEC_fp_adi[lev][solve_dir][component],
+                        amrex::convert(pencil_ba[solve_dir], e_nodal_flags[component]),
+                        pencil_dm[solve_dir], 1, IntVect(0),
+                        tag("PEC_fp_adi[" + dir + "][" + comp + "]"));
+                }
             }
         }
     }
