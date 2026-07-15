@@ -132,7 +132,8 @@ namespace
     void solve_periodic_lines (
         MultiFab& field, MultiFab const& rhs,
         MultiFab const& Cb, MultiFab const& Db,
-        int dir, Real inv_d2)
+        int dir, Real inv_d2,
+        MultiFab const* pec_mask)
     {
         WARPX_ALWAYS_ASSERT_WITH_MESSAGE(field.ixType().nodeCentered(dir),
             "Macroscopic ADI periodic solve expects a nodal line along the implicit direction.");
@@ -154,6 +155,10 @@ namespace
             auto const field_arr = field.array(mfi);
             auto const cb_arr = Cb.const_array(mfi);
             auto const db_arr = Db.const_array(mfi);
+            Array4<Real const> pec_arr;
+            if (pec_mask) {
+                pec_arr = pec_mask->const_array(mfi);
+            }
             WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
                 bx.smallEnd(dir) == lo && bx.bigEnd(dir) == hi,
                 "Each ADI pencil must span the full implicit direction.");
@@ -186,6 +191,7 @@ namespace
                 Real const alpha = -db_seam * inv_d2;
                 Real const beta = -db_seam * inv_d2;
 
+                // Physical coefficients first (needed for Sherman-Morrison corners).
                 for (int p = 0; p < nsolve; ++p) {
                     int const s = lo + p;
                     Real const db_lo = (p == 0) ? db_seam
@@ -203,13 +209,33 @@ namespace
                 bb[0] -= gamma;
                 bb[nsolve - 1] -= alpha * beta / gamma;
 
+                // Blend PEC-mask nodes into identity rows with zero RHS.
+                if (pec_mask) {
+                    for (int p = 0; p < nsolve; ++p) {
+                        Real const m = line_value(pec_arr, dir, lo + p, i, j, k);
+                        a[p] *= m;
+                        bb[p] = m * bb[p] + (1._rt - m);
+                        c[p] *= m;
+                        x[p] *= m;
+                    }
+                }
+
                 solve_cyclic_tridiagonal(a, bb, c, alpha, beta, gamma, x, x,
                                          cprime, dprime, z, nsolve);
 
-                for (int p = 0; p < nsolve; ++p) {
-                    set_line_value(field_arr, dir, lo + p, i, j, k, x[p]);
+                if (pec_mask) {
+                    for (int p = 0; p < nsolve; ++p) {
+                        Real const m = line_value(pec_arr, dir, lo + p, i, j, k);
+                        set_line_value(field_arr, dir, lo + p, i, j, k, m * x[p]);
+                    }
+                    Real const m0 = line_value(pec_arr, dir, lo, i, j, k);
+                    set_line_value(field_arr, dir, hi, i, j, k, m0 * x[0]);
+                } else {
+                    for (int p = 0; p < nsolve; ++p) {
+                        set_line_value(field_arr, dir, lo + p, i, j, k, x[p]);
+                    }
+                    set_line_value(field_arr, dir, hi, i, j, k, x[0]);
                 }
-                set_line_value(field_arr, dir, hi, i, j, k, x[0]);
             });
         }
     }
@@ -217,7 +243,8 @@ namespace
     void solve_dirichlet_nodal_lines (
         MultiFab& field, MultiFab const& rhs,
         MultiFab const& Cb, MultiFab const& Db,
-        int dir, Real inv_d2)
+        int dir, Real inv_d2,
+        MultiFab const* pec_mask)
     {
         WARPX_ALWAYS_ASSERT_WITH_MESSAGE(field.ixType().nodeCentered(dir),
             "Macroscopic ADI PEC solve expects a nodal line along the implicit direction.");
@@ -239,6 +266,10 @@ namespace
             auto const field_arr = field.array(mfi);
             auto const cb_arr = Cb.const_array(mfi);
             auto const db_arr = Db.const_array(mfi);
+            Array4<Real const> pec_arr;
+            if (pec_mask != nullptr) {
+                pec_arr = pec_mask->const_array(mfi);
+            }
             WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
                 bx.smallEnd(dir) == lo && bx.bigEnd(dir) == hi,
                 "Each ADI PEC pencil must span the full implicit direction.");
@@ -276,13 +307,30 @@ namespace
                     a[p] = (p == 0) ? 0._rt : -al;
                     c[p] = (p == nsolve - 1) ? 0._rt : -ga;
                     x[p] = line_value(field_arr, dir, lo + 1 + p, i, j, k);
+                    if (pec_mask) {
+                        Real const m = line_value(pec_arr, dir, s, i, j, k);
+                        a[p] *= m;
+                        b[p] = m * b[p] + (1._rt - m);
+                        c[p] *= m;
+                        x[p] *= m;
+                    }
                 }
 
                 solve_tridiagonal(a, b, c, x, x, cprime, dprime, nsolve);
 
                 set_line_value(field_arr, dir, lo, i, j, k, 0._rt);
-                for (int p = 0; p < nsolve; ++p) {
-                    set_line_value(field_arr, dir, lo + 1 + p, i, j, k, x[p]);
+                if (pec_mask) {
+                    for (int p = 0; p < nsolve; ++p) {
+                        Real const m =
+                            line_value(pec_arr, dir, lo + 1 + p, i, j, k);
+                        set_line_value(
+                            field_arr, dir, lo + 1 + p, i, j, k, m * x[p]);
+                    }
+                } else {
+                    for (int p = 0; p < nsolve; ++p) {
+                        set_line_value(
+                            field_arr, dir, lo + 1 + p, i, j, k, x[p]);
+                    }
                 }
                 set_line_value(field_arr, dir, hi, i, j, k, 0._rt);
             });
@@ -322,12 +370,49 @@ namespace
     void solve_implicit_component (MultiFab& field, MultiFab const& rhs,
                                    MultiFab const& Cb, MultiFab const& Db,
                                    int e_comp, int solve_dir, Real inv_d2,
-                                   PecConfig const& pec)
+                                   PecConfig const& pec,
+                                   MultiFab const* pec_mask)
     {
         if (use_pec_dirichlet_solve(e_comp, solve_dir, pec)) {
-            solve_dirichlet_nodal_lines(field, rhs, Cb, Db, solve_dir, inv_d2);
+            solve_dirichlet_nodal_lines(field, rhs, Cb, Db, solve_dir, inv_d2, pec_mask);
         } else {
-            solve_periodic_lines(field, rhs, Cb, Db, solve_dir, inv_d2);
+            solve_periodic_lines(field, rhs, Cb, Db, solve_dir, inv_d2, pec_mask);
+        }
+    }
+
+    // Remap PEC_fp[comp] onto the ADI pencil BoxArray used by field.
+    MultiFab make_pec_mask_on_pencil (
+        MultiFab const& field, int e_comp, Periodicity const& periodicity)
+    {
+        MultiFab pec_on_pencil(field.boxArray(), field.DistributionMap(), 1, 0);
+        WarpX& warpx = WarpX::GetInstance();
+        MultiFab const* pec_src = warpx.get_pointer_PEC_fp(0, e_comp);
+        WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+            pec_src != nullptr,
+            "algo.use_PEC_mask=1 requires PEC_fp for ADI mask pinning.");
+        pec_on_pencil.ParallelCopy(
+            *pec_src, 0, 0, 1, IntVect(0), IntVect(0), periodicity);
+        return pec_on_pencil;
+    }
+
+    MultiFab const* optional_pec_mask (
+        MultiFab& pec_storage, MultiFab const& field, int e_comp,
+        Periodicity const& periodicity)
+    {
+        if (!WarpX::use_PEC_mask) { return nullptr; }
+        pec_storage = make_pec_mask_on_pencil(field, e_comp, periodicity);
+        return &pec_storage;
+    }
+
+    // Zero E on interior conductor edges marked by PEC_fp (mask value 0).
+    void apply_pec_mask (FieldArray& Efield)
+    {
+        if (!WarpX::use_PEC_mask) { return; }
+        WarpX& warpx = WarpX::GetInstance();
+        for (int comp = 0; comp < 3; ++comp) {
+            MultiFab* pec = warpx.get_pointer_PEC_fp(0, comp);
+            if (pec == nullptr) { continue; }
+            MultiFab::Multiply(*Efield[comp], *pec, 0, 0, 1, 0);
         }
     }
 
@@ -785,8 +870,10 @@ namespace
         MultiFab Db = make_coeff_like(ex, *mat.Db[2]);
         copy_coeff_to_layout(Cb, *mat.Cb[0], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[2], periodicity);
+        MultiFab pec_storage;
+        MultiFab const* pec_mask = optional_pec_mask(pec_storage, ex, 0, periodicity);
         solve_implicit_component(ex, rhs, Cb, Db,
-                                 0, 1, c.inv_dy * c.inv_dy, pec);
+                                 0, 1, c.inv_dy * c.inv_dy, pec, pec_mask);
     }
 
     void solve_implicit_ey1 (MultiFab& ey, MultiFab const& rhs,
@@ -797,8 +884,10 @@ namespace
         MultiFab Db = make_coeff_like(ey, *mat.Db[0]);
         copy_coeff_to_layout(Cb, *mat.Cb[1], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[0], periodicity);
+        MultiFab pec_storage;
+        MultiFab const* pec_mask = optional_pec_mask(pec_storage, ey, 1, periodicity);
         solve_implicit_component(ey, rhs, Cb, Db,
-                                 1, 2, c.inv_dz * c.inv_dz, pec);
+                                 1, 2, c.inv_dz * c.inv_dz, pec, pec_mask);
     }
 
     void solve_implicit_ez1 (MultiFab& ez, MultiFab const& rhs,
@@ -809,8 +898,10 @@ namespace
         MultiFab Db = make_coeff_like(ez, *mat.Db[1]);
         copy_coeff_to_layout(Cb, *mat.Cb[2], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[1], periodicity);
+        MultiFab pec_storage;
+        MultiFab const* pec_mask = optional_pec_mask(pec_storage, ez, 2, periodicity);
         solve_implicit_component(ez, rhs, Cb, Db,
-                                 2, 0, c.inv_dx * c.inv_dx, pec);
+                                 2, 0, c.inv_dx * c.inv_dx, pec, pec_mask);
     }
 
     void solve_implicit_ex2 (MultiFab& ex, MultiFab const& rhs,
@@ -821,8 +912,10 @@ namespace
         MultiFab Db = make_coeff_like(ex, *mat.Db[1]);
         copy_coeff_to_layout(Cb, *mat.Cb[0], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[1], periodicity);
+        MultiFab pec_storage;
+        MultiFab const* pec_mask = optional_pec_mask(pec_storage, ex, 0, periodicity);
         solve_implicit_component(ex, rhs, Cb, Db,
-                                 0, 2, c.inv_dz * c.inv_dz, pec);
+                                 0, 2, c.inv_dz * c.inv_dz, pec, pec_mask);
     }
 
     void solve_implicit_ey2 (MultiFab& ey, MultiFab const& rhs,
@@ -833,8 +926,10 @@ namespace
         MultiFab Db = make_coeff_like(ey, *mat.Db[2]);
         copy_coeff_to_layout(Cb, *mat.Cb[1], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[2], periodicity);
+        MultiFab pec_storage;
+        MultiFab const* pec_mask = optional_pec_mask(pec_storage, ey, 1, periodicity);
         solve_implicit_component(ey, rhs, Cb, Db,
-                                 1, 0, c.inv_dx * c.inv_dx, pec);
+                                 1, 0, c.inv_dx * c.inv_dx, pec, pec_mask);
     }
 
     void solve_implicit_ez2 (MultiFab& ez, MultiFab const& rhs,
@@ -845,8 +940,10 @@ namespace
         MultiFab Db = make_coeff_like(ez, *mat.Db[0]);
         copy_coeff_to_layout(Cb, *mat.Cb[2], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[0], periodicity);
+        MultiFab pec_storage;
+        MultiFab const* pec_mask = optional_pec_mask(pec_storage, ez, 2, periodicity);
         solve_implicit_component(ez, rhs, Cb, Db,
-                                 2, 1, c.inv_dy * c.inv_dy, pec);
+                                 2, 1, c.inv_dy * c.inv_dy, pec, pec_mask);
     }
 
     void step_bx (MultiFab& bx, MultiFab const& ey, MultiFab const& ez, AdiCoeffs const& c)
@@ -946,6 +1043,7 @@ namespace
 
         fill_periodic(Efield, periodicity);
         pin_pec_tangential_e(Efield, pec);
+        apply_pec_mask(Efield);
 
         step_bx(*Bfield[0], *Efield[1], Ez0, c);
         step_by(*Bfield[1], *Efield[2], Ex0, c);
@@ -999,6 +1097,7 @@ namespace
 
         fill_periodic(Efield, periodicity);
         pin_pec_tangential_e(Efield, pec);
+        apply_pec_mask(Efield);
 
         step_bx(*Bfield[0], Eyh, *Efield[2], c);
         step_by(*Bfield[1], Ezh, *Efield[0], c);
