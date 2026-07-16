@@ -237,6 +237,8 @@ namespace
                     set_line_value(field_arr, dir, hi, i, j, k, x[0]);
                 }
             });
+            // DeviceVectors below must outlive the async GPU kernel.
+            Gpu::streamSynchronize();
         }
     }
 
@@ -334,6 +336,8 @@ namespace
                 }
                 set_line_value(field_arr, dir, hi, i, j, k, 0._rt);
             });
+            // DeviceVectors below must outlive the async GPU kernel.
+            Gpu::streamSynchronize();
         }
     }
 
