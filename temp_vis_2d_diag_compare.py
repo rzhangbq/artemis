@@ -53,7 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("circuit_test_run/E_xy_diag_comparison.mp4"),
+        default=Path("circuit_test_run/E_xy_diag_comparison.webm"),
     )
     return parser.parse_args()
 
@@ -222,14 +222,10 @@ def main() -> None:
     writer = FFMpegWriter(
         fps=args.fps,
         bitrate=7200,
-        codec="libx264",
+        codec="libvpx-vp9",
         extra_args=(
             "-vf",
             "pad=ceil(iw/2)*2:ceil(ih/2)*2",
-            "-pix_fmt",
-            "yuv420p",
-            "-movflags",
-            "+faststart",
         ),
     )
     with writer.saving(fig, args.output, dpi=args.dpi):
