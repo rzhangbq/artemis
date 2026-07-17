@@ -165,8 +165,8 @@ namespace
 
             Box const b2d = amrex::makeSlab(bx, dir, lo);
             Long const nlines = b2d.numPts();
-            Gpu::DeviceVector<Real> line_work(nlines * nsolve * n_line_work);
-            Gpu::DeviceVector<Real> line_coeff(nlines * nsolve * n_line_coeff);
+            Gpu::AsyncVector<Real> line_work(nlines * nsolve * n_line_work);
+            Gpu::AsyncVector<Real> line_coeff(nlines * nsolve * n_line_coeff);
             Real* work = line_work.data();
             Real* coeff = line_coeff.data();
             int const xlo = b2d.smallEnd(0);
@@ -237,7 +237,6 @@ namespace
                     set_line_value(field_arr, dir, hi, i, j, k, x[0]);
                 }
             });
-            Gpu::streamSynchronize();
         }
     }
 
@@ -277,8 +276,8 @@ namespace
 
             Box const b2d = amrex::makeSlab(bx, dir, lo + 1);
             Long const nlines = b2d.numPts();
-            Gpu::DeviceVector<Real> line_work(nlines * nsolve * n_line_work);
-            Gpu::DeviceVector<Real> line_coeff(nlines * nsolve * n_line_coeff);
+            Gpu::AsyncVector<Real> line_work(nlines * nsolve * n_line_work);
+            Gpu::AsyncVector<Real> line_coeff(nlines * nsolve * n_line_coeff);
             Real* work = line_work.data();
             Real* coeff = line_coeff.data();
             int const xlo = b2d.smallEnd(0);
@@ -335,7 +334,6 @@ namespace
                 }
                 set_line_value(field_arr, dir, hi, i, j, k, 0._rt);
             });
-            Gpu::streamSynchronize();
         }
     }
 
@@ -433,14 +431,16 @@ namespace
 
     MultiFab make_rhs (MultiFab const& mf)
     {
-        return MultiFab(mf.boxArray(), mf.DistributionMap(), 1, 0);
+        return MultiFab(mf.boxArray(), mf.DistributionMap(), 1, 0,
+                        MFInfo().SetArena(The_Async_Arena()));
     }
 
     MultiFab make_coeff_like (MultiFab const& field, MultiFab const& coef)
     {
         BoxArray ba(field.boxArray());
         ba.convert(coef.ixType());
-        return MultiFab(ba, field.DistributionMap(), 1, coef.nGrowVect());
+        return MultiFab(ba, field.DistributionMap(), 1, coef.nGrowVect(),
+                        MFInfo().SetArena(The_Async_Arena()));
     }
 
     void copy_coeff_to_layout (
@@ -451,7 +451,8 @@ namespace
 
     MultiFab make_copy (MultiFab const& mf)
     {
-        MultiFab copy(mf.boxArray(), mf.DistributionMap(), 1, mf.nGrowVect());
+        MultiFab copy(mf.boxArray(), mf.DistributionMap(), 1, mf.nGrowVect(),
+                      MFInfo().SetArena(The_Async_Arena()));
         MultiFab::Copy(copy, mf, 0, 0, 1, mf.nGrowVect());
         return copy;
     }
@@ -629,7 +630,6 @@ namespace
                     - r * c.inv_dx * c.inv_dy * ey_hi;
             });
         }
-        Gpu::streamSynchronize();
         return rhs;
     }
 
@@ -668,7 +668,6 @@ namespace
                     - r * c.inv_dy * c.inv_dz * ez_hi;
             });
         }
-        Gpu::streamSynchronize();
         return rhs;
     }
 
@@ -707,7 +706,6 @@ namespace
                     - r * c.inv_dz * c.inv_dx * ex_hi;
             });
         }
-        Gpu::streamSynchronize();
         return rhs;
     }
 
@@ -746,7 +744,6 @@ namespace
                     - r * c.inv_dx * c.inv_dz * ez_hi;
             });
         }
-        Gpu::streamSynchronize();
         return rhs;
     }
 
@@ -785,7 +782,6 @@ namespace
                     - r * c.inv_dy * c.inv_dx * ex_hi;
             });
         }
-        Gpu::streamSynchronize();
         return rhs;
     }
 
@@ -824,7 +820,6 @@ namespace
                     - r * c.inv_dz * c.inv_dy * ey_hi;
             });
         }
-        Gpu::streamSynchronize();
         return rhs;
     }
 
@@ -925,7 +920,6 @@ namespace
                                            (ez_arr(i,j+1,k) - ez_arr(i,j,k)) * c.inv_dy);
             });
         }
-        Gpu::streamSynchronize();
     }
 
     void step_by (MultiFab& by, MultiFab const& ez, MultiFab const& ex, AdiCoeffs const& c)
@@ -941,7 +935,6 @@ namespace
                                            (ex_arr(i,j,k+1) - ex_arr(i,j,k)) * c.inv_dz);
             });
         }
-        Gpu::streamSynchronize();
     }
 
     void step_bz (MultiFab& bz, MultiFab const& ex, MultiFab const& ey, AdiCoeffs const& c)
@@ -957,7 +950,6 @@ namespace
                                            (ey_arr(i+1,j,k) - ey_arr(i,j,k)) * c.inv_dx);
             });
         }
-        Gpu::streamSynchronize();
     }
 
     void adi_first_half_step (
