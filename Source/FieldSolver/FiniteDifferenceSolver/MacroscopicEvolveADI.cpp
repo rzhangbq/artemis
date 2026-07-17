@@ -237,7 +237,6 @@ namespace
                     set_line_value(field_arr, dir, hi, i, j, k, x[0]);
                 }
             });
-            // DeviceVectors below must outlive the async GPU kernel.
             Gpu::streamSynchronize();
         }
     }
@@ -336,7 +335,6 @@ namespace
                 }
                 set_line_value(field_arr, dir, hi, i, j, k, 0._rt);
             });
-            // DeviceVectors below must outlive the async GPU kernel.
             Gpu::streamSynchronize();
         }
     }
@@ -617,23 +615,21 @@ namespace
             auto const p_arr = p_field.const_array(mfi);
             auto const db_arr = db_field.const_array(mfi);
             Box const& bx = mfi.validbox();
-            for (int k = bx.smallEnd(2); k <= bx.bigEnd(2); ++k) {
-                for (int j = bx.smallEnd(1); j <= bx.bigEnd(1); ++j) {
-                    for (int i = bx.smallEnd(0); i <= bx.bigEnd(0); ++i) {
-                        Real const q = db_arr(i, j-1, k);
-                        Real const r = db_arr(i, j, k);
-                        Real const curl_h =
-                            (hz_arr(i,j,k) - hz_arr(i,j-1,k)) * c.inv_dy -
-                            (hy_arr(i,j,k) - hy_arr(i,j,k-1)) * c.inv_dz;
-                        Real const ey_lo = ey_arr(i+1,j-1,k) - ey_arr(i,j-1,k);
-                        Real const ey_hi = ey_arr(i+1,j,k) - ey_arr(i,j,k);
-                        rhs_arr(i,j,k) = p_arr(i,j,k) * ex_arr(i,j,k) + curl_h
-                            + q * c.inv_dx * c.inv_dy * ey_lo
-                            - r * c.inv_dx * c.inv_dy * ey_hi;
-                    }
-                }
-            }
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                Real const q = db_arr(i, j-1, k);
+                Real const r = db_arr(i, j, k);
+                Real const curl_h =
+                    (hz_arr(i,j,k) - hz_arr(i,j-1,k)) * c.inv_dy -
+                    (hy_arr(i,j,k) - hy_arr(i,j,k-1)) * c.inv_dz;
+                Real const ey_lo = ey_arr(i+1,j-1,k) - ey_arr(i,j-1,k);
+                Real const ey_hi = ey_arr(i+1,j,k) - ey_arr(i,j,k);
+                rhs_arr(i,j,k) = p_arr(i,j,k) * ex_arr(i,j,k) + curl_h
+                    + q * c.inv_dx * c.inv_dy * ey_lo
+                    - r * c.inv_dx * c.inv_dy * ey_hi;
+            });
         }
+        Gpu::streamSynchronize();
         return rhs;
     }
 
@@ -658,23 +654,21 @@ namespace
             auto const p_arr = p_field.const_array(mfi);
             auto const db_arr = db_field.const_array(mfi);
             Box const& b = mfi.validbox();
-            for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
-                for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
-                    for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-                        Real const q = db_arr(i, j, k-1);
-                        Real const r = db_arr(i, j, k);
-                        Real const curl_h =
-                            (hx_arr(i,j,k) - hx_arr(i,j,k-1)) * c.inv_dz -
-                            (hz_arr(i,j,k) - hz_arr(i-1,j,k)) * c.inv_dx;
-                        Real const ez_lo = ez_arr(i,j+1,k-1) - ez_arr(i,j,k-1);
-                        Real const ez_hi = ez_arr(i,j+1,k) - ez_arr(i,j,k);
-                        rhs_arr(i,j,k) = p_arr(i,j,k) * ey_arr(i,j,k) + curl_h
-                            + q * c.inv_dy * c.inv_dz * ez_lo
-                            - r * c.inv_dy * c.inv_dz * ez_hi;
-                    }
-                }
-            }
+            ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                Real const q = db_arr(i, j, k-1);
+                Real const r = db_arr(i, j, k);
+                Real const curl_h =
+                    (hx_arr(i,j,k) - hx_arr(i,j,k-1)) * c.inv_dz -
+                    (hz_arr(i,j,k) - hz_arr(i-1,j,k)) * c.inv_dx;
+                Real const ez_lo = ez_arr(i,j+1,k-1) - ez_arr(i,j,k-1);
+                Real const ez_hi = ez_arr(i,j+1,k) - ez_arr(i,j,k);
+                rhs_arr(i,j,k) = p_arr(i,j,k) * ey_arr(i,j,k) + curl_h
+                    + q * c.inv_dy * c.inv_dz * ez_lo
+                    - r * c.inv_dy * c.inv_dz * ez_hi;
+            });
         }
+        Gpu::streamSynchronize();
         return rhs;
     }
 
@@ -699,23 +693,21 @@ namespace
             auto const p_arr = p_field.const_array(mfi);
             auto const db_arr = db_field.const_array(mfi);
             Box const& b = mfi.validbox();
-            for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
-                for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
-                    for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-                        Real const q = db_arr(i-1, j, k);
-                        Real const r = db_arr(i, j, k);
-                        Real const curl_h =
-                            (hy_arr(i,j,k) - hy_arr(i-1,j,k)) * c.inv_dx -
-                            (hx_arr(i,j,k) - hx_arr(i,j-1,k)) * c.inv_dy;
-                        Real const ex_lo = ex_arr(i-1,j,k+1) - ex_arr(i-1,j,k);
-                        Real const ex_hi = ex_arr(i,j,k+1) - ex_arr(i,j,k);
-                        rhs_arr(i,j,k) = p_arr(i,j,k) * ez_arr(i,j,k) + curl_h
-                            + q * c.inv_dz * c.inv_dx * ex_lo
-                            - r * c.inv_dz * c.inv_dx * ex_hi;
-                    }
-                }
-            }
+            ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                Real const q = db_arr(i-1, j, k);
+                Real const r = db_arr(i, j, k);
+                Real const curl_h =
+                    (hy_arr(i,j,k) - hy_arr(i-1,j,k)) * c.inv_dx -
+                    (hx_arr(i,j,k) - hx_arr(i,j-1,k)) * c.inv_dy;
+                Real const ex_lo = ex_arr(i-1,j,k+1) - ex_arr(i-1,j,k);
+                Real const ex_hi = ex_arr(i,j,k+1) - ex_arr(i,j,k);
+                rhs_arr(i,j,k) = p_arr(i,j,k) * ez_arr(i,j,k) + curl_h
+                    + q * c.inv_dz * c.inv_dx * ex_lo
+                    - r * c.inv_dz * c.inv_dx * ex_hi;
+            });
         }
+        Gpu::streamSynchronize();
         return rhs;
     }
 
@@ -740,23 +732,21 @@ namespace
             auto const p_arr = p_field.const_array(mfi);
             auto const db_arr = db_field.const_array(mfi);
             Box const& b = mfi.validbox();
-            for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
-                for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
-                    for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-                        Real const q = db_arr(i, j, k-1);
-                        Real const r = db_arr(i, j, k);
-                        Real const curl_h =
-                            (hz_arr(i,j,k) - hz_arr(i,j-1,k)) * c.inv_dy -
-                            (hy_arr(i,j,k) - hy_arr(i,j,k-1)) * c.inv_dz;
-                        Real const ez_lo = ez_arr(i+1,j,k-1) - ez_arr(i,j,k-1);
-                        Real const ez_hi = ez_arr(i+1,j,k) - ez_arr(i,j,k);
-                        rhs_arr(i,j,k) = p_arr(i,j,k) * ex_arr(i,j,k) + curl_h
-                            + q * c.inv_dx * c.inv_dz * ez_lo
-                            - r * c.inv_dx * c.inv_dz * ez_hi;
-                    }
-                }
-            }
+            ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                Real const q = db_arr(i, j, k-1);
+                Real const r = db_arr(i, j, k);
+                Real const curl_h =
+                    (hz_arr(i,j,k) - hz_arr(i,j-1,k)) * c.inv_dy -
+                    (hy_arr(i,j,k) - hy_arr(i,j,k-1)) * c.inv_dz;
+                Real const ez_lo = ez_arr(i+1,j,k-1) - ez_arr(i,j,k-1);
+                Real const ez_hi = ez_arr(i+1,j,k) - ez_arr(i,j,k);
+                rhs_arr(i,j,k) = p_arr(i,j,k) * ex_arr(i,j,k) + curl_h
+                    + q * c.inv_dx * c.inv_dz * ez_lo
+                    - r * c.inv_dx * c.inv_dz * ez_hi;
+            });
         }
+        Gpu::streamSynchronize();
         return rhs;
     }
 
@@ -781,23 +771,21 @@ namespace
             auto const p_arr = p_field.const_array(mfi);
             auto const db_arr = db_field.const_array(mfi);
             Box const& b = mfi.validbox();
-            for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
-                for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
-                    for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-                        Real const q = db_arr(i-1, j, k);
-                        Real const r = db_arr(i, j, k);
-                        Real const curl_h =
-                            (hx_arr(i,j,k) - hx_arr(i,j,k-1)) * c.inv_dz -
-                            (hz_arr(i,j,k) - hz_arr(i-1,j,k)) * c.inv_dx;
-                        Real const ex_lo = ex_arr(i-1,j+1,k) - ex_arr(i-1,j,k);
-                        Real const ex_hi = ex_arr(i,j+1,k) - ex_arr(i,j,k);
-                        rhs_arr(i,j,k) = p_arr(i,j,k) * ey_arr(i,j,k) + curl_h
-                            + q * c.inv_dy * c.inv_dx * ex_lo
-                            - r * c.inv_dy * c.inv_dx * ex_hi;
-                    }
-                }
-            }
+            ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                Real const q = db_arr(i-1, j, k);
+                Real const r = db_arr(i, j, k);
+                Real const curl_h =
+                    (hx_arr(i,j,k) - hx_arr(i,j,k-1)) * c.inv_dz -
+                    (hz_arr(i,j,k) - hz_arr(i-1,j,k)) * c.inv_dx;
+                Real const ex_lo = ex_arr(i-1,j+1,k) - ex_arr(i-1,j,k);
+                Real const ex_hi = ex_arr(i,j+1,k) - ex_arr(i,j,k);
+                rhs_arr(i,j,k) = p_arr(i,j,k) * ey_arr(i,j,k) + curl_h
+                    + q * c.inv_dy * c.inv_dx * ex_lo
+                    - r * c.inv_dy * c.inv_dx * ex_hi;
+            });
         }
+        Gpu::streamSynchronize();
         return rhs;
     }
 
@@ -822,23 +810,21 @@ namespace
             auto const p_arr = p_field.const_array(mfi);
             auto const db_arr = db_field.const_array(mfi);
             Box const& b = mfi.validbox();
-            for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
-                for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
-                    for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-                        Real const q = db_arr(i, j-1, k);
-                        Real const r = db_arr(i, j, k);
-                        Real const curl_h =
-                            (hy_arr(i,j,k) - hy_arr(i-1,j,k)) * c.inv_dx -
-                            (hx_arr(i,j,k) - hx_arr(i,j-1,k)) * c.inv_dy;
-                        Real const ey_lo = ey_arr(i,j-1,k+1) - ey_arr(i,j-1,k);
-                        Real const ey_hi = ey_arr(i,j,k+1) - ey_arr(i,j,k);
-                        rhs_arr(i,j,k) = p_arr(i,j,k) * ez_arr(i,j,k) + curl_h
-                            + q * c.inv_dz * c.inv_dy * ey_lo
-                            - r * c.inv_dz * c.inv_dy * ey_hi;
-                    }
-                }
-            }
+            ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                Real const q = db_arr(i, j-1, k);
+                Real const r = db_arr(i, j, k);
+                Real const curl_h =
+                    (hy_arr(i,j,k) - hy_arr(i-1,j,k)) * c.inv_dx -
+                    (hx_arr(i,j,k) - hx_arr(i,j-1,k)) * c.inv_dy;
+                Real const ey_lo = ey_arr(i,j-1,k+1) - ey_arr(i,j-1,k);
+                Real const ey_hi = ey_arr(i,j,k+1) - ey_arr(i,j,k);
+                rhs_arr(i,j,k) = p_arr(i,j,k) * ez_arr(i,j,k) + curl_h
+                    + q * c.inv_dz * c.inv_dy * ey_lo
+                    - r * c.inv_dz * c.inv_dy * ey_hi;
+            });
         }
+        Gpu::streamSynchronize();
         return rhs;
     }
 
@@ -933,15 +919,13 @@ namespace
             auto const ey_arr = ey.const_array(mfi);
             auto const ez_arr = ez.const_array(mfi);
             Box const& b = mfi.validbox();
-            for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
-                for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
-                    for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-                        bx_arr(i,j,k) += c.dtd2 * ((ey_arr(i,j,k+1) - ey_arr(i,j,k)) * c.inv_dz -
-                                                   (ez_arr(i,j+1,k) - ez_arr(i,j,k)) * c.inv_dy);
-                    }
-                }
-            }
+            ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                bx_arr(i,j,k) += c.dtd2 * ((ey_arr(i,j,k+1) - ey_arr(i,j,k)) * c.inv_dz -
+                                           (ez_arr(i,j+1,k) - ez_arr(i,j,k)) * c.inv_dy);
+            });
         }
+        Gpu::streamSynchronize();
     }
 
     void step_by (MultiFab& by, MultiFab const& ez, MultiFab const& ex, AdiCoeffs const& c)
@@ -951,15 +935,13 @@ namespace
             auto const ez_arr = ez.const_array(mfi);
             auto const ex_arr = ex.const_array(mfi);
             Box const& b = mfi.validbox();
-            for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
-                for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
-                    for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-                        by_arr(i,j,k) += c.dtd2 * ((ez_arr(i+1,j,k) - ez_arr(i,j,k)) * c.inv_dx -
-                                                   (ex_arr(i,j,k+1) - ex_arr(i,j,k)) * c.inv_dz);
-                    }
-                }
-            }
+            ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                by_arr(i,j,k) += c.dtd2 * ((ez_arr(i+1,j,k) - ez_arr(i,j,k)) * c.inv_dx -
+                                           (ex_arr(i,j,k+1) - ex_arr(i,j,k)) * c.inv_dz);
+            });
         }
+        Gpu::streamSynchronize();
     }
 
     void step_bz (MultiFab& bz, MultiFab const& ex, MultiFab const& ey, AdiCoeffs const& c)
@@ -969,15 +951,13 @@ namespace
             auto const ex_arr = ex.const_array(mfi);
             auto const ey_arr = ey.const_array(mfi);
             Box const& b = mfi.validbox();
-            for (int k = b.smallEnd(2); k <= b.bigEnd(2); ++k) {
-                for (int j = b.smallEnd(1); j <= b.bigEnd(1); ++j) {
-                    for (int i = b.smallEnd(0); i <= b.bigEnd(0); ++i) {
-                        bz_arr(i,j,k) += c.dtd2 * ((ex_arr(i,j+1,k) - ex_arr(i,j,k)) * c.inv_dy -
-                                                   (ey_arr(i+1,j,k) - ey_arr(i,j,k)) * c.inv_dx);
-                    }
-                }
-            }
+            ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                bz_arr(i,j,k) += c.dtd2 * ((ex_arr(i,j+1,k) - ex_arr(i,j,k)) * c.inv_dy -
+                                           (ey_arr(i+1,j,k) - ey_arr(i,j,k)) * c.inv_dx);
+            });
         }
+        Gpu::streamSynchronize();
     }
 
     void adi_first_half_step (
