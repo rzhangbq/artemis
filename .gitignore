@@ -13,7 +13,7 @@ Backtrace.*
 *.vth
 *.sw[opqrs]
 warpx_used_inputs
-diags/
+diag*/
 wave_freespace_run/
 *_run/
 *.mp4
