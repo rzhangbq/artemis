@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render three Artemis diagnostic series side-by-side with a shared color scale."""
+"""Render Artemis diagnostic series side-by-side with a shared color scale."""
 
 from __future__ import annotations
 
@@ -8,7 +8,8 @@ import logging
 import os
 from pathlib import Path
 
-os.environ.setdefault("MPLCONFIGDIR", "/private/tmp/mplconfig")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/mplconfig")
+Path(os.environ["MPLCONFIGDIR"]).mkdir(parents=True, exist_ok=True)
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,9 +19,12 @@ from tqdm import tqdm
 
 
 SERIES = (
-    ("FDTD CFL=0.8", Path("diag_fdtd_08")),
-    ("ADI CFL=0.8", Path("diag_adi_08")),
-    ("ADI CFL=4", Path("diag_adi_4")),
+    ("FDTD CFL=0.8", Path("run_archive/diags_fdtd_08")),
+    # ("ADI CFL=0.8", Path("run_archive/diags_adi_08")),
+    ("ADI CFL=1.6", Path("run_archive/diags_adi_16")),
+    ("ADI CFL=3.2", Path("run_archive/diags_adi_32")),
+    ("ADI CFL=6.4", Path("run_archive/diags_adi_64")),
+    ("ADI CFL=12.8", Path("run_archive/diags_adi_128")),
 )
 PLANES = {
     "xy": (0, 1, 2),
@@ -53,7 +57,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("circuit_test_run/E_xy_diag_comparison.webm"),
+        # pace ffmpeg/7.1 is built without libvpx/libx264; mpeg4+mp4 works.
+        default=Path("circuit_test_run/E_xy_diag_comparison.mp4"),
     )
     return parser.parse_args()
 
@@ -124,7 +129,7 @@ def load_slice(
 
 
 def shared_clim(slices: list[np.ndarray], signed: bool) -> tuple[float, float]:
-    """Return limits spanning all three datasets for the current frame."""
+    """Return limits spanning all datasets for the current frame."""
     if signed:
         vmax = max(float(np.max(np.abs(frame))) for frame in slices)
         vmax = max(vmax, np.finfo(float).eps)
@@ -137,11 +142,25 @@ def shared_clim(slices: list[np.ndarray], signed: bool) -> tuple[float, float]:
     return vmin, vmax
 
 
+def panel_layout(n_series: int) -> tuple[int, int]:
+    """Choose a compact (nrows, ncols) grid for n_series panels."""
+    if n_series <= 0:
+        raise ValueError("SERIES must contain at least one entry")
+    if n_series <= 3:
+        return 1, n_series
+    if n_series <= 6:
+        return 2, (n_series + 1) // 2
+    ncols = int(np.ceil(np.sqrt(n_series)))
+    nrows = int(np.ceil(n_series / ncols))
+    return nrows, ncols
+
+
 def main() -> None:
     args = parse_args()
     if args.stride < 1:
         raise ValueError("--stride must be at least 1")
 
+    n_series = len(SERIES)
     all_paths = [sorted_plotfiles(directory)[:: args.stride] for _, directory in SERIES]
     frame_counts = [len(paths) for paths in all_paths]
     if len(set(frame_counts)) != 1:
@@ -170,26 +189,33 @@ def main() -> None:
         raise ValueError(f"Slice shapes differ in the first frame: {shapes}")
 
     vmin, vmax = shared_clim(slices, signed)
-    fig = plt.figure(figsize=(19, 5.5))
-    grid_spec = fig.add_gridspec(
+    nrows, ncols = panel_layout(n_series)
+    fig = plt.figure(figsize=(5.5 * ncols + 1.2, 4.8 * nrows + 0.8))
+    # Outer gridspec: plot grid | colorbar column
+    outer = fig.add_gridspec(
         1,
-        4,
-        width_ratios=(1, 1, 1, 0.045),
+        2,
+        width_ratios=(ncols, 0.045),
         left=0.055,
         right=0.97,
-        bottom=0.12,
-        top=0.87,
-        wspace=0.12,
+        bottom=0.08,
+        top=0.88,
+        wspace=0.08,
     )
-    axes = [fig.add_subplot(grid_spec[0, 0])]
-    axes.extend(
-        fig.add_subplot(grid_spec[0, column], sharex=axes[0], sharey=axes[0])
-        for column in (1, 2)
-    )
-    colorbar_axis = fig.add_subplot(grid_spec[0, 3])
+    inner = outer[0, 0].subgridspec(nrows, ncols, wspace=0.18, hspace=0.28)
+    axes = []
+    for index in range(n_series):
+        row, col = divmod(index, ncols)
+        if index == 0:
+            axes.append(fig.add_subplot(inner[row, col]))
+        else:
+            axes.append(
+                fig.add_subplot(inner[row, col], sharex=axes[0], sharey=axes[0])
+            )
+    colorbar_axis = fig.add_subplot(outer[0, 1])
     images = []
     for ax, (label, _), frame, extent, fixed in zip(
-        axes, SERIES, slices, extents, fixed_indices
+        axes, SERIES, slices, extents, fixed_indices, strict=True
     ):
         image = ax.imshow(
             frame.T,
@@ -212,7 +238,10 @@ def main() -> None:
             color="white",
             bbox={"facecolor": "black", "alpha": 0.45, "edgecolor": "none"},
         )
-    axes[0].set_ylabel(f"{AXIS_NAME[ax1]} (mm)")
+    for row in range(nrows):
+        left_index = row * ncols
+        if left_index < n_series:
+            axes[left_index].set_ylabel(f"{AXIS_NAME[ax1]} (mm)")
     colorbar = fig.colorbar(images[0], cax=colorbar_axis)
     colorbar.set_label(args.variable)
     title = fig.suptitle(
@@ -222,8 +251,10 @@ def main() -> None:
     writer = FFMpegWriter(
         fps=args.fps,
         bitrate=7200,
-        codec="libvpx-vp9",
+        codec="mpeg4",
         extra_args=(
+            "-pix_fmt",
+            "yuv420p",
             "-vf",
             "pad=ceil(iw/2)*2:ceil(ih/2)*2",
         ),
@@ -233,7 +264,7 @@ def main() -> None:
             if frame_index:
                 times, slices, extents, _ = read_frame(frame_index)
             vmin, vmax = shared_clim(slices, signed)
-            for image, frame, extent in zip(images, slices, extents):
+            for image, frame, extent in zip(images, slices, extents, strict=True):
                 image.set_data(frame.T)
                 image.set_extent(extent)
                 image.set_clim(vmin, vmax)
@@ -244,6 +275,7 @@ def main() -> None:
 
     plt.close(fig)
     print(f"Wrote {args.output}")
+    print(f"Series: {n_series}")
     print(f"Frames: {frame_counts[0]}")
 
 
