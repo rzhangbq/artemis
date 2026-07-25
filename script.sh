@@ -1,12 +1,12 @@
-srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=12.8 plt.intervals=0 max_step=6250 &&
-srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=12.8 plt.intervals=5 max_step=6875 amr.restart=diags/chk0006250 && mv diags run_archive/diags_adi_128 &&
-srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=6.4 plt.intervals=0 max_step=12500 &&
-srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=6.4 plt.intervals=10 max_step=13750 amr.restart=diags/chk0012500 && mv diags run_archive/diags_adi_64 &&
-srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=3.2 plt.intervals=0 max_step=25000 &&
-srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=3.2 plt.intervals=20 max_step=27500 amr.restart=diags/chk0025000 && mv diags run_archive/diags_adi_32 &&
-srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=1.6 plt.intervals=0 max_step=50000 &&
-srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=1.6 plt.intervals=40 max_step=55000 amr.restart=diags/chk0050000 && mv diags run_archive/diags_adi_16 &&
-srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=0.8 plt.intervals=0 max_step=100000 &&
-srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=0.8 plt.intervals=80 max_step=110000 amr.restart=diags/chk0100000 && mv diags run_archive/diags_adi_08 &&
-srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=fdtd my_constants.cfl=0.8 plt.intervals=0 max_step=100000 &&
-srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=fdtd my_constants.cfl=0.8 plt.intervals=80 max_step=110000 amr.restart=diags/chk0100000 && mv diags run_archive/diags_fdtd_08
+srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=25.6 plt.intervals=0 max_step=2560 &&
+srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=25.6 plt.intervals=2 max_step=2816 amr.restart=diags/chk0002560 && mv diags run_archive/diags_adi_256 &&
+srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=12.8 plt.intervals=0 max_step=5120 &&
+srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=12.8 plt.intervals=4 max_step=5632 amr.restart=diags/chk0005120 && mv diags run_archive/diags_adi_128 &&
+srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=6.4 plt.intervals=0 max_step=10240 &&
+srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=6.4 plt.intervals=8 max_step=11264 amr.restart=diags/chk0010240 && mv diags run_archive/diags_adi_64 &&
+srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=3.2 plt.intervals=0 max_step=20480 &&
+srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=3.2 plt.intervals=16 max_step=22528 amr.restart=diags/chk0020480 && mv diags run_archive/diags_adi_32 &&
+srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=1.6 plt.intervals=0 max_step=40960 &&
+srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=adi my_constants.cfl=1.6 plt.intervals=32 max_step=45056 amr.restart=diags/chk0040960 && mv diags run_archive/diags_adi_16 &&
+srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=fdtd my_constants.cfl=0.8 plt.intervals=0 max_step=81920 &&
+srun -n 1 Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex inputs_artemis_crosstalk algo.time_stepping_scheme=fdtd my_constants.cfl=0.8 plt.intervals=64 max_step=90112 amr.restart=diags/chk0081920 && mv diags run_archive/diags_fdtd_08
