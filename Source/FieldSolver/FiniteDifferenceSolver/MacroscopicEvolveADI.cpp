@@ -4,6 +4,7 @@
 #include "Utils/TextMsg.H"
 #include "Utils/WarpXAlgorithmSelection.H"
 #include "Utils/WarpXConst.H"
+#include "Utils/WarpXUtil.H"
 #include "WarpX.H"
 
 #include <ablastr/coarsen/sample.H>
@@ -449,6 +450,56 @@ namespace
         dst.ParallelCopy(src, 0, 0, 1, IntVect(0), dst.nGrowVect(), periodicity);
     }
 
+    void add_soft_e_source_to_rhs (
+        MultiFab& rhs, MultiFab const& Cb, int e_comp, Real time)
+    {
+        if (WarpX::E_excitation_grid_s != "parse_e_excitation_grid_function") {
+            return;
+        }
+
+        WarpX& warpx = WarpX::GetInstance();
+        auto const field_parser =
+            (e_comp == 0) ? warpx.Exfield_xt_grid_parser->compile<4>() :
+            (e_comp == 1) ? warpx.Eyfield_xt_grid_parser->compile<4>() :
+                            warpx.Ezfield_xt_grid_parser->compile<4>();
+        auto const flag_parser =
+            (e_comp == 0) ? warpx.Exfield_flag_parser->compile<3>() :
+            (e_comp == 1) ? warpx.Eyfield_flag_parser->compile<3>() :
+                            warpx.Ezfield_flag_parser->compile<3>();
+
+        GpuArray<int, 3> rhs_stag;
+        for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+            rhs_stag[idim] = rhs.ixType()[idim];
+        }
+        auto const problo = warpx.Geom(0).ProbLoArray();
+        auto const dx = warpx.Geom(0).CellSizeArray();
+        IntVect const rhs_nodal_flag = rhs.ixType().toIntVect();
+
+#ifdef AMREX_USE_OMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+        for (MFIter mfi(rhs, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+            Array4<Real> const rhs_arr = rhs.array(mfi);
+            Array4<Real const> const cb_arr = Cb.const_array(mfi);
+            Box const& bx = mfi.tilebox(rhs_nodal_flag);
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                Real x, y, z;
+                WarpXUtilAlgo::getCellCoordinates(i, j, k, rhs_stag, problo, dx, x, y, z);
+                Real const flag_type = flag_parser(x, y, z);
+                if (flag_type > 2._rt) {
+                    amrex::Abort("flag type for excitation must be <= 2");
+                } else if (flag_type == 2._rt) {
+                    rhs_arr(i,j,k) +=
+                        0.5_rt * field_parser(x, y, z, time) / cb_arr(i,j,k);
+                } else if (flag_type > 0._rt) {
+                    amrex::Abort(
+                        "Macroscopic ADI RHS-coupled E excitation supports only soft sources.");
+                }
+            });
+        }
+    }
+
     MultiFab make_copy (MultiFab const& mf)
     {
         MultiFab copy(mf.boxArray(), mf.DistributionMap(), 1, mf.nGrowVect(),
@@ -600,12 +651,14 @@ namespace
         MultiFab const& ex, MultiFab const& ey,
         MultiFab const& hy, MultiFab const& hz,
         AdiCoeffs const& c, AdiMaterialCoeffs const& mat,
-        Periodicity const& periodicity)
+        Periodicity const& periodicity, Real source_time)
     {
         MultiFab rhs = make_rhs(ex);
         MultiFab p_field = make_rhs(ex);
+        MultiFab cb_field = make_rhs(ex);
         MultiFab db_field = make_coeff_like(ex, *mat.Db[2]);
         copy_coeff_to_layout(p_field, *mat.p[0], periodicity);
+        copy_coeff_to_layout(cb_field, *mat.Cb[0], periodicity);
         copy_coeff_to_layout(db_field, *mat.Db[2], periodicity);
         for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
             auto const rhs_arr = rhs.array(mfi);
@@ -630,6 +683,7 @@ namespace
                     - r * c.inv_dx * c.inv_dy * ey_hi;
             });
         }
+        add_soft_e_source_to_rhs(rhs, cb_field, 0, source_time);
         return rhs;
     }
 
@@ -638,12 +692,14 @@ namespace
         MultiFab const& ey, MultiFab const& ez,
         MultiFab const& hx, MultiFab const& hz,
         AdiCoeffs const& c, AdiMaterialCoeffs const& mat,
-        Periodicity const& periodicity)
+        Periodicity const& periodicity, Real source_time)
     {
         MultiFab rhs = make_rhs(ey);
         MultiFab p_field = make_rhs(ey);
+        MultiFab cb_field = make_rhs(ey);
         MultiFab db_field = make_coeff_like(ey, *mat.Db[0]);
         copy_coeff_to_layout(p_field, *mat.p[1], periodicity);
+        copy_coeff_to_layout(cb_field, *mat.Cb[1], periodicity);
         copy_coeff_to_layout(db_field, *mat.Db[0], periodicity);
         for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
             auto const rhs_arr = rhs.array(mfi);
@@ -668,6 +724,7 @@ namespace
                     - r * c.inv_dy * c.inv_dz * ez_hi;
             });
         }
+        add_soft_e_source_to_rhs(rhs, cb_field, 1, source_time);
         return rhs;
     }
 
@@ -676,12 +733,14 @@ namespace
         MultiFab const& ez, MultiFab const& ex,
         MultiFab const& hx, MultiFab const& hy,
         AdiCoeffs const& c, AdiMaterialCoeffs const& mat,
-        Periodicity const& periodicity)
+        Periodicity const& periodicity, Real source_time)
     {
         MultiFab rhs = make_rhs(ez);
         MultiFab p_field = make_rhs(ez);
+        MultiFab cb_field = make_rhs(ez);
         MultiFab db_field = make_coeff_like(ez, *mat.Db[1]);
         copy_coeff_to_layout(p_field, *mat.p[2], periodicity);
+        copy_coeff_to_layout(cb_field, *mat.Cb[2], periodicity);
         copy_coeff_to_layout(db_field, *mat.Db[1], periodicity);
         for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
             auto const rhs_arr = rhs.array(mfi);
@@ -706,6 +765,7 @@ namespace
                     - r * c.inv_dz * c.inv_dx * ex_hi;
             });
         }
+        add_soft_e_source_to_rhs(rhs, cb_field, 2, source_time);
         return rhs;
     }
 
@@ -714,12 +774,14 @@ namespace
         MultiFab const& ex, MultiFab const& ez,
         MultiFab const& hy, MultiFab const& hz,
         AdiCoeffs const& c, AdiMaterialCoeffs const& mat,
-        Periodicity const& periodicity)
+        Periodicity const& periodicity, Real source_time)
     {
         MultiFab rhs = make_rhs(ex);
         MultiFab p_field = make_rhs(ex);
+        MultiFab cb_field = make_rhs(ex);
         MultiFab db_field = make_coeff_like(ex, *mat.Db[1]);
         copy_coeff_to_layout(p_field, *mat.p[0], periodicity);
+        copy_coeff_to_layout(cb_field, *mat.Cb[0], periodicity);
         copy_coeff_to_layout(db_field, *mat.Db[1], periodicity);
         for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
             auto const rhs_arr = rhs.array(mfi);
@@ -744,6 +806,7 @@ namespace
                     - r * c.inv_dx * c.inv_dz * ez_hi;
             });
         }
+        add_soft_e_source_to_rhs(rhs, cb_field, 0, source_time);
         return rhs;
     }
 
@@ -752,12 +815,14 @@ namespace
         MultiFab const& ey, MultiFab const& ex,
         MultiFab const& hx, MultiFab const& hz,
         AdiCoeffs const& c, AdiMaterialCoeffs const& mat,
-        Periodicity const& periodicity)
+        Periodicity const& periodicity, Real source_time)
     {
         MultiFab rhs = make_rhs(ey);
         MultiFab p_field = make_rhs(ey);
+        MultiFab cb_field = make_rhs(ey);
         MultiFab db_field = make_coeff_like(ey, *mat.Db[2]);
         copy_coeff_to_layout(p_field, *mat.p[1], periodicity);
+        copy_coeff_to_layout(cb_field, *mat.Cb[1], periodicity);
         copy_coeff_to_layout(db_field, *mat.Db[2], periodicity);
         for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
             auto const rhs_arr = rhs.array(mfi);
@@ -782,6 +847,7 @@ namespace
                     - r * c.inv_dy * c.inv_dx * ex_hi;
             });
         }
+        add_soft_e_source_to_rhs(rhs, cb_field, 1, source_time);
         return rhs;
     }
 
@@ -790,12 +856,14 @@ namespace
         MultiFab const& ez, MultiFab const& ey,
         MultiFab const& hx, MultiFab const& hy,
         AdiCoeffs const& c, AdiMaterialCoeffs const& mat,
-        Periodicity const& periodicity)
+        Periodicity const& periodicity, Real source_time)
     {
         MultiFab rhs = make_rhs(ez);
         MultiFab p_field = make_rhs(ez);
+        MultiFab cb_field = make_rhs(ez);
         MultiFab db_field = make_coeff_like(ez, *mat.Db[0]);
         copy_coeff_to_layout(p_field, *mat.p[2], periodicity);
+        copy_coeff_to_layout(cb_field, *mat.Cb[2], periodicity);
         copy_coeff_to_layout(db_field, *mat.Db[0], periodicity);
         for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
             auto const rhs_arr = rhs.array(mfi);
@@ -820,6 +888,7 @@ namespace
                     - r * c.inv_dz * c.inv_dy * ey_hi;
             });
         }
+        add_soft_e_source_to_rhs(rhs, cb_field, 2, source_time);
         return rhs;
     }
 
@@ -961,7 +1030,8 @@ namespace
         AdiMaterialCoeffs const& mat,
         Periodicity const& periodicity,
         PecConfig const& pec,
-        AdiFieldArray const& pec_masks)
+        AdiFieldArray const& pec_masks,
+        Real source_time)
     {
         // Implicit E along y,z,x; explicit B at n+1/2.
         MultiFab Ex0 = make_copy(*Efield[0]);
@@ -972,19 +1042,19 @@ namespace
         copy_fields(Bfield_adi[1], mat.H, periodicity);
         MultiFab rhs_ex = build_rhs_ex1(
             *Efield_adi[1][0], *Efield_adi[1][1],
-            *Bfield_adi[1][1], *Bfield_adi[1][2], c, mat, periodicity);
+            *Bfield_adi[1][1], *Bfield_adi[1][2], c, mat, periodicity, source_time);
 
         copy_fields(Efield_adi[2], Efield, periodicity);
         copy_fields(Bfield_adi[2], mat.H, periodicity);
         MultiFab rhs_ey = build_rhs_ey1(
             *Efield_adi[2][1], *Efield_adi[2][2],
-            *Bfield_adi[2][0], *Bfield_adi[2][2], c, mat, periodicity);
+            *Bfield_adi[2][0], *Bfield_adi[2][2], c, mat, periodicity, source_time);
 
         copy_fields(Efield_adi[0], Efield, periodicity);
         copy_fields(Bfield_adi[0], mat.H, periodicity);
         MultiFab rhs_ez = build_rhs_ez1(
             *Efield_adi[0][2], *Efield_adi[0][0],
-            *Bfield_adi[0][0], *Bfield_adi[0][1], c, mat, periodicity);
+            *Bfield_adi[0][0], *Bfield_adi[0][1], c, mat, periodicity, source_time);
 
         solve_implicit_ex1(*Efield_adi[1][0], rhs_ex, c, mat, periodicity, pec, pec_masks);
         solve_implicit_ey1(*Efield_adi[2][1], rhs_ey, c, mat, periodicity, pec, pec_masks);
@@ -1013,7 +1083,8 @@ namespace
         AdiMaterialCoeffs const& mat,
         Periodicity const& periodicity,
         PecConfig const& pec,
-        AdiFieldArray const& pec_masks)
+        AdiFieldArray const& pec_masks,
+        Real source_time)
     {
         // Implicit E along z,x,y; explicit B at n+1.
         MultiFab Exh = make_copy(*Efield[0]);
@@ -1026,19 +1097,19 @@ namespace
         copy_fields(Bfield_adi[2], mat.H, periodicity);
         MultiFab rhs_ex = build_rhs_ex2(
             *Efield_adi[2][0], *Efield_adi[2][2],
-            *Bfield_adi[2][1], *Bfield_adi[2][2], c, mat, periodicity);
+            *Bfield_adi[2][1], *Bfield_adi[2][2], c, mat, periodicity, source_time);
 
         copy_fields(Efield_adi[0], Efield, periodicity);
         copy_fields(Bfield_adi[0], mat.H, periodicity);
         MultiFab rhs_ey = build_rhs_ey2(
             *Efield_adi[0][1], *Efield_adi[0][0],
-            *Bfield_adi[0][0], *Bfield_adi[0][2], c, mat, periodicity);
+            *Bfield_adi[0][0], *Bfield_adi[0][2], c, mat, periodicity, source_time);
 
         copy_fields(Efield_adi[1], Efield, periodicity);
         copy_fields(Bfield_adi[1], mat.H, periodicity);
         MultiFab rhs_ez = build_rhs_ez2(
             *Efield_adi[1][2], *Efield_adi[1][1],
-            *Bfield_adi[1][0], *Bfield_adi[1][1], c, mat, periodicity);
+            *Bfield_adi[1][0], *Bfield_adi[1][1], c, mat, periodicity, source_time);
 
         solve_implicit_ex2(*Efield_adi[2][0], rhs_ex, c, mat, periodicity, pec, pec_masks);
         solve_implicit_ey2(*Efield_adi[0][1], rhs_ey, c, mat, periodicity, pec, pec_masks);
@@ -1106,30 +1177,27 @@ FiniteDifferenceSolver::MacroscopicEvolveADI (
     AdiMaterialCoeffs mat;
     define_material_coeffs(Efield, Bfield, mat);
     update_material_coeffs(mat, Bfield, dt, periodicity, macroscopic_properties);
-    adi_first_half_step(
-        Efield, Bfield, Efield_adi, Bfield_adi, c, mat, periodicity, pec, PEC_adi);
 
-    // Soft sources use factor 0.5 on FirstHalf/SecondHalf so both halves total one Full.
     WarpX& warpx = WarpX::GetInstance();
+    Real const first_e_source_time = warpx.gett_new(0) + 0.25_rt * dt;
+    Real const second_e_source_time = warpx.gett_new(0) + 0.75_rt * dt;
+
+    adi_first_half_step(
+        Efield, Bfield, Efield_adi, Bfield_adi, c, mat, periodicity, pec, PEC_adi,
+        first_e_source_time);
+
     warpx.FillBoundaryE(warpx.getngEB());
     warpx.FillBoundaryB(warpx.getngEB());
-    warpx.ApplyExternalFieldExcitationOnGrid(
-        ExternalFieldType::EfieldExternal, DtType::FirstHalf);
-    pin_pec_tangential_e(Efield, pec);
-    apply_pec_mask(Efield);
     warpx.ApplyExternalFieldExcitationOnGrid(
         ExternalFieldType::BfieldExternal, DtType::FirstHalf);
 
     update_material_coeffs(mat, Bfield, dt, periodicity, macroscopic_properties);
     adi_second_half_step(
-        Efield, Bfield, Efield_adi, Bfield_adi, c, mat, periodicity, pec, PEC_adi);
+        Efield, Bfield, Efield_adi, Bfield_adi, c, mat, periodicity, pec, PEC_adi,
+        second_e_source_time);
 
     warpx.FillBoundaryE(warpx.getngEB());
     warpx.FillBoundaryB(warpx.getngEB());
-    warpx.ApplyExternalFieldExcitationOnGrid(
-        ExternalFieldType::EfieldExternal, DtType::SecondHalf);
-    pin_pec_tangential_e(Efield, pec);
-    apply_pec_mask(Efield);
     warpx.ApplyExternalFieldExcitationOnGrid(
         ExternalFieldType::BfieldExternal, DtType::SecondHalf);
 #endif
