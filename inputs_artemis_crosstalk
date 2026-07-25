@@ -1,8 +1,8 @@
 ################################
 ####### GENERAL PARAMETERS ######
 #################################
-max_step = 100000
-#amr.restart = diags/chk1780000
+max_step = 2500
+# amr.restart = diags/chk0100000
 
 amr.n_cell = n_cellx n_celly n_cellz
 amr.max_grid_size_x = max_grid_sizex
@@ -26,13 +26,14 @@ boundary.field_hi = pec pec pec
 #################################
 warpx.verbose = 0
 
-warpx.cfl = 0.8
+warpx.cfl = cfl
 
 # vacuum or macroscopic
 algo.em_solver_medium = macroscopic
 
 # laxwendroff or backwardeuler
 algo.macroscopic_sigma_method = laxwendroff
+algo.time_stepping_scheme = adi
 
 macroscopic.npy_k_index = 25
 
@@ -48,9 +49,9 @@ macroscopic.sigma_function(x,y,z) = "sigma_0 + (sigma_si - sigma_0) * (z <= h_si
 macroscopic.epsilon_function(x,y,z) = "eps_0 + eps_0 * (eps_r_si - 1.) * (z <= h_si)"
 macroscopic.mu_function(x,y,z) = "mu_0 + mu_0 * (mu_r_si - 1.) * (z <= h_si)"
 
-algo.use_lumped_inductor = 0
-
-inductor.inductor_x_function(x,y,z) = "384.6153846153846e-12 * (x > 297.5e-6) * (x < 362.5e-6) * (y > 425.e-6 - ddy) * (y < 425.e-6 + ddy) * (z > h_si - ddz) * (z < h_si + ddz)"
+algo.use_lumped_inductor = 1
+# inductor per cell
+inductor.inductor_x_function(x,y,z) = "384.6153846153846e-14 * (x > 297.5e-6) * (x < 362.5e-6) * (y > 425.e-6 - ddy) * (y < 425.e-6 + ddy) * (z > h_si - ddz) * (z < h_si + ddz)"
 inductor.inductor_y_function(x,y,z) = "0."
 inductor.inductor_z_function(x,y,z) = "0."
 
@@ -108,7 +109,8 @@ my_constants.h_si = 75.e-6
 
 my_constants.pi = 3.14159265358979
 
-my_constants.freq = 7.5e12
+my_constants.cfl = 3.2
+my_constants.freq = 7.5e10
 my_constants.TP = 1./freq
 
 # grid spacing
@@ -134,8 +136,7 @@ warpx.Ex_excitation_flag_function(x,y,z) = "flag_ss * (x >= 297.5e-6) * (x <= 36
 warpx.Ey_excitation_flag_function(x,y,z) = "flag_none"
 warpx.Ez_excitation_flag_function(x,y,z) = "flag_none"
 
-warpx.Ex_excitation_grid_function(x,y,z,t) = "exp(-(t-3*TP)**2/(2*TP**2))*sin(2*pi*freq*t) *
-                                                       (x >= 297.5e-6) * (x <= 362.5e-6) * (z > h_si - ddz) * (z < h_si + ddz) * (y > 675.e-6 - ddy) * (y < 675.e-6 + ddy)"
+warpx.Ex_excitation_grid_function(x,y,z,t) = "cfl/0.8 * exp(-(t-3*TP)**2/(2*TP**2))*sin(2*pi*freq*t) * (x >= 297.5e-6) * (x <= 362.5e-6) * (z > h_si - ddz) * (z < h_si + ddz) * (y > 675.e-6 - ddy) * (y < 675.e-6 + ddy)"
 warpx.Ey_excitation_grid_function(x,y,z,t) = "0."
 warpx.Ez_excitation_grid_function(x,y,z,t) = "0."
 
