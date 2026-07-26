@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/mplconfig")
@@ -19,12 +20,13 @@ from tqdm import tqdm
 
 
 SERIES = (
-    ("FDTD CFL=0.8", Path("run_archive/diags_fdtd_08")),
-    # ("ADI CFL=0.8", Path("run_archive/diags_adi_08")),
-    ("ADI CFL=1.6", Path("run_archive/diags_adi_16")),
-    ("ADI CFL=3.2", Path("run_archive/diags_adi_32")),
-    ("ADI CFL=6.4", Path("run_archive/diags_adi_64")),
-    ("ADI CFL=12.8", Path("run_archive/diags_adi_128")),
+    ("FDTD CFL=0.8", Path("run_archive_nonresona_7_5_e9_n/diags_fdtd_08")),
+    ("ADI CFL=1.6", Path("run_archive_nonresona_7_5_e9_n/diags_adi_16")),
+    ("ADI CFL=3.2", Path("run_archive_nonresona_7_5_e9_n/diags_adi_32")),
+    ("ADI CFL=6.4", Path("run_archive_nonresona_7_5_e9_n/diags_adi_64")),
+    ("ADI CFL=12.8", Path("run_archive_nonresona_7_5_e9_n/diags_adi_128")),
+    ("ADI CFL=25.6", Path("run_archive_nonresona_7_5_e9_n/diags_adi_256")),
+    # ("ADI CFL=51.2", Path("run_archive_nonresona_7_5_e9_n/diags_adi_512")),
 )
 PLANES = {
     "xy": (0, 1, 2),
@@ -52,6 +54,12 @@ def parse_args() -> argparse.Namespace:
         help="index along the normal axis (default: center)",
     )
     parser.add_argument("--stride", type=int, default=1)
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        help="parallel plotfile readers (1 = serial)",
+    )
     parser.add_argument("--fps", type=int, default=20)
     parser.add_argument("--dpi", type=int, default=150)
     parser.add_argument(
@@ -91,6 +99,7 @@ def load_slice(
     plane: str,
     slice_index: int | None,
 ) -> tuple[float, np.ndarray, list[float], int]:
+    """Load one 2D slice from an AMReX plotfile (only the requested field)."""
     ax0, ax1, normal = PLANES[plane]
     ds = yt.load(str(path))
     grid = ds.covering_grid(
@@ -109,7 +118,8 @@ def load_slice(
 
     index = [slice(None)] * 3
     index[normal] = fixed
-    slice2d = np.asarray(field[tuple(index)])
+    # Copy so worker processes return self-contained arrays.
+    slice2d = np.asarray(field[tuple(index)], dtype=np.float64).copy()
 
     centers = []
     for axis in (ax0, ax1):
@@ -126,6 +136,72 @@ def load_slice(
         float(centers[1][-1] * 1e3),
     ]
     return float(ds.current_time), slice2d, extent, fixed
+
+
+def _load_slice_job(
+    job: tuple[str, str, str, int | None],
+) -> tuple[float, np.ndarray, list[float], int]:
+    path, variable, plane, slice_index = job
+    return load_slice(Path(path), variable, plane, slice_index)
+
+
+def preload_slices(
+    all_paths: list[list[Path]],
+    variable: str,
+    plane: str,
+    slice_index: int | None,
+    workers: int,
+) -> tuple[np.ndarray, list[list[np.ndarray]], list[list[float]], list[int]]:
+    """Load every series/frame slice, optionally in parallel.
+
+    Returns times[n_frames], slices[n_series][n_frames], extents[n_series],
+    and fixed_indices[n_series].
+    """
+    n_series = len(all_paths)
+    n_frames = len(all_paths[0])
+    # Jobs ordered as (frame0 series0..N), (frame1 series0..N), ...
+    jobs = [
+        (str(all_paths[series][frame]), variable, plane, slice_index)
+        for frame in range(n_frames)
+        for series in range(n_series)
+    ]
+
+    if workers <= 1:
+        loaded = [_load_slice_job(job) for job in tqdm(jobs, desc="Loading")]
+    else:
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            loaded = list(
+                tqdm(
+                    pool.map(_load_slice_job, jobs, chunksize=1),
+                    total=len(jobs),
+                    desc=f"Loading ({workers} workers)",
+                )
+            )
+
+    times = np.empty(n_frames, dtype=np.float64)
+    slices: list[list[np.ndarray]] = [[None] * n_frames for _ in range(n_series)]  # type: ignore[list-item]
+    extents: list[list[float]] = [[]] * n_series
+    fixed_indices = [0] * n_series
+
+    for frame in range(n_frames):
+        frame_times = []
+        for series in range(n_series):
+            time, slice2d, extent, fixed = loaded[frame * n_series + series]
+            frame_times.append(time)
+            slices[series][frame] = slice2d
+            extents[series] = extent
+            fixed_indices[series] = fixed
+        frame_times_arr = np.asarray(frame_times)
+        tolerance = max(1.0e-15, 1.0e-8 * float(np.max(np.abs(frame_times_arr))))
+        if not np.allclose(
+            frame_times_arr, frame_times_arr[0], rtol=1.0e-8, atol=tolerance
+        ):
+            raise ValueError(
+                f"Physical times do not match at frame {frame}: {frame_times}"
+            )
+        times[frame] = frame_times_arr[0]
+
+    return times, slices, extents, fixed_indices
 
 
 def shared_clim(slices: list[np.ndarray], signed: bool) -> tuple[float, float]:
@@ -159,36 +235,33 @@ def main() -> None:
     args = parse_args()
     if args.stride < 1:
         raise ValueError("--stride must be at least 1")
+    if args.workers < 1:
+        raise ValueError("--workers must be at least 1")
 
     n_series = len(SERIES)
     all_paths = [sorted_plotfiles(directory)[:: args.stride] for _, directory in SERIES]
     frame_counts = [len(paths) for paths in all_paths]
     if len(set(frame_counts)) != 1:
         raise ValueError(f"Diagnostic series have different frame counts: {frame_counts}")
+    n_frames = frame_counts[0]
 
     ax0, ax1, normal = PLANES[args.plane]
     signed = not args.variable.startswith("|") and args.variable != "epsilon"
     cmap = "RdBu_r" if signed else "viridis"
 
-    def read_frame(frame_index: int):
-        loaded = [
-            load_slice(paths[frame_index], args.variable, args.plane, args.slice_index)
-            for paths in all_paths
-        ]
-        times = np.asarray([item[0] for item in loaded])
-        tolerance = max(1.0e-15, 1.0e-8 * float(np.max(np.abs(times))))
-        if not np.allclose(times, times[0], rtol=1.0e-8, atol=tolerance):
-            raise ValueError(
-                f"Physical times do not match at frame {frame_index}: {times.tolist()}"
-            )
-        return times, [item[1] for item in loaded], [item[2] for item in loaded], [item[3] for item in loaded]
-
-    times, slices, extents, fixed_indices = read_frame(0)
-    shapes = [frame.shape for frame in slices]
+    times, all_slices, extents, fixed_indices = preload_slices(
+        all_paths,
+        args.variable,
+        args.plane,
+        args.slice_index,
+        args.workers,
+    )
+    shapes = [frames[0].shape for frames in all_slices]
     if len(set(shapes)) != 1:
         raise ValueError(f"Slice shapes differ in the first frame: {shapes}")
 
-    vmin, vmax = shared_clim(slices, signed)
+    frame0 = [frames[0] for frames in all_slices]
+    vmin, vmax = shared_clim(frame0, signed)
     nrows, ncols = panel_layout(n_series)
     fig = plt.figure(figsize=(5.5 * ncols + 1.2, 4.8 * nrows + 0.8))
     # Outer gridspec: plot grid | colorbar column
@@ -215,7 +288,7 @@ def main() -> None:
     colorbar_axis = fig.add_subplot(outer[0, 1])
     images = []
     for ax, (label, _), frame, extent, fixed in zip(
-        axes, SERIES, slices, extents, fixed_indices, strict=True
+        axes, SERIES, frame0, extents, fixed_indices, strict=True
     ):
         image = ax.imshow(
             frame.T,
@@ -260,23 +333,23 @@ def main() -> None:
         ),
     )
     with writer.saving(fig, args.output, dpi=args.dpi):
-        for frame_index in tqdm(range(frame_counts[0]), desc="Rendering"):
-            if frame_index:
-                times, slices, extents, _ = read_frame(frame_index)
+        for frame_index in tqdm(range(n_frames), desc="Rendering"):
+            slices = [frames[frame_index] for frames in all_slices]
             vmin, vmax = shared_clim(slices, signed)
             for image, frame, extent in zip(images, slices, extents, strict=True):
                 image.set_data(frame.T)
                 image.set_extent(extent)
                 image.set_clim(vmin, vmax)
             title.set_text(
-                f"{args.variable} on {args.plane} plane, t = {times[0]:.3e} s"
+                f"{args.variable} on {args.plane} plane, t = {times[frame_index]:.3e} s"
             )
             writer.grab_frame()
 
     plt.close(fig)
     print(f"Wrote {args.output}")
     print(f"Series: {n_series}")
-    print(f"Frames: {frame_counts[0]}")
+    print(f"Frames: {n_frames}")
+    print(f"Workers: {args.workers}")
 
 
 if __name__ == "__main__":
