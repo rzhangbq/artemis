@@ -150,7 +150,8 @@ WarpX::Evolve (int numsteps)
                 m_london->EvolveLondonJ(-0.5_rt*dt[0]); // J^(n) to J^(n-1/2) using E^(n)
                 FillBoundaryJ(guard_cells.ng_alloc_EB);
             }
-            if (use_lumped_inductor) {
+            if (use_lumped_inductor &&
+                macroscopic_time_integrator_algo != MacroscopicTimeSteppingScheme::ADI) {
                 m_inductor->EvolveInductorJ(-0.5_rt*dt[0]); // J^(n) to J^(n-1/2) using E^(n)
                 FillBoundaryJ(guard_cells.ng_alloc_EB);
             }
@@ -427,7 +428,8 @@ WarpX::OneStep_nosub (Real cur_time)
         // fill boundary here
     }
 #endif
-    if (use_lumped_inductor == 1) {
+    if (use_lumped_inductor == 1 &&
+        macroscopic_time_integrator_algo != MacroscopicTimeSteppingScheme::ADI) {
         m_inductor->EvolveInductorJ(dt[0]); // J^(n-1/2) to J^(n+1/2) using E^(n)
         FillBoundaryJ(guard_cells.ng_alloc_EB);
     }

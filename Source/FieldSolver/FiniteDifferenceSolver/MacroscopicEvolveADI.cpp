@@ -37,12 +37,14 @@ namespace
         Real inv_dz = 0._rt;
         Real dt = 0._rt;
         Real dtd2 = 0._rt;
+        Real dtd4 = 0._rt;
     };
 
     struct AdiMaterialCoeffs
     {
         FieldArray Cb;
         FieldArray p;
+        FieldArray kappa;
         FieldArray Db;
         FieldArray H;
     };
@@ -522,6 +524,7 @@ namespace
         for (int comp = 0; comp < 3; ++comp) {
             coeffs.Cb[comp] = make_like(*Efield[comp]);
             coeffs.p[comp] = make_like(*Efield[comp]);
+            coeffs.kappa[comp] = make_like(*Efield[comp]);
             coeffs.Db[comp] = make_like(*Bfield[comp]);
             coeffs.H[comp] = make_like(*Bfield[comp]);
         }
@@ -552,9 +555,27 @@ namespace
             &macroscopic_properties->By_IndexType,
             &macroscopic_properties->Bz_IndexType};
 
+        WarpX& warpx = WarpX::GetInstance();
+        bool const use_lumped_inductor = WarpX::use_lumped_inductor == 1;
+        std::array<MultiFab const*, 3> inductance = {nullptr, nullptr, nullptr};
+        if (use_lumped_inductor) {
+            Inductor const& inductor = warpx.getInductor();
+            inductance = {
+                inductor.m_inductor_x_mf.get(),
+                inductor.m_inductor_y_mf.get(),
+                inductor.m_inductor_z_mf.get()};
+        }
+        auto const cell_size = warpx.Geom(0).CellSizeArray();
+        std::array<Real, 3> const kappa_scale = {
+            cell_size[0] / (cell_size[1] * cell_size[2]),
+            cell_size[1] / (cell_size[0] * cell_size[2]),
+            cell_size[2] / (cell_size[0] * cell_size[1])};
+
         for (int comp = 0; comp < 3; ++comp) {
             MultiFab& Cb = *coeffs.Cb[comp];
             MultiFab& p = *coeffs.p[comp];
+            MultiFab& kappa_mf = *coeffs.kappa[comp];
+            MultiFab const* inductance_mf = inductance[comp];
 
             // Fill only the valid region, then exchange ghosts below. Including the
             // grown tilebox here makes sample::Interp read sigma/epsilon outside their
@@ -562,10 +583,17 @@ namespace
             for (MFIter mfi(Cb, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
                 Array4<Real> const cb_arr = Cb.array(mfi);
                 Array4<Real> const p_arr = p.array(mfi);
+                Array4<Real> const kappa_arr = kappa_mf.array(mfi);
                 Array4<Real> const sigma_arr = sigma_mf.array(mfi);
                 Array4<Real> const eps_arr = epsilon_mf.array(mfi);
+                Array4<Real const> inductance_arr;
+                if (inductance_mf != nullptr) {
+                    inductance_arr = inductance_mf->const_array(mfi);
+                }
                 Box const& bx = mfi.tilebox(Cb.ixType().toIntVect());
                 auto const& estag = *e_stag[comp];
+                Real const scale = kappa_scale[comp];
+                bool const has_inductor = inductance_mf != nullptr;
                 int const scomp = 0;
 
                 ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
@@ -574,11 +602,17 @@ namespace
                         sigma_arr, sigma_stag, estag, macro_cr, i, j, k, scomp);
                     Real const eps = ablastr::coarsen::sample::Interp(
                         eps_arr, epsilon_stag, estag, macro_cr, i, j, k, scomp);
-                    Real const denom = 4._rt * eps + sigma * dt;
-                    Real const Ca = (4._rt * eps - sigma * dt) / denom;
+                    Real const L = has_inductor ? inductance_arr(i,j,k) : 0._rt;
+                    Real const kappa = (L > 0._rt) ? scale / L : 0._rt;
+                    // Centering J_L in Ampere and E in dJ_L/dt over a half-step
+                    // adds dt*kappa/8 to both electric endpoint coefficients.
+                    Real const dt2_kappa_d4 = 0.25_rt * dt * dt * kappa;
+                    Real const denom = 4._rt * eps + sigma * dt + dt2_kappa_d4;
                     Real const Cb_val = 2._rt * dt / denom;
                     cb_arr(i,j,k) = Cb_val;
-                    p_arr(i,j,k) = Ca / Cb_val;
+                    p_arr(i,j,k) =
+                        (4._rt * eps - sigma * dt - dt2_kappa_d4) / (2._rt * dt);
+                    kappa_arr(i,j,k) = kappa;
                 });
             }
 
@@ -608,6 +642,7 @@ namespace
         for (int comp = 0; comp < 3; ++comp) {
             coeffs.Cb[comp]->FillBoundary(periodicity);
             coeffs.p[comp]->FillBoundary(periodicity);
+            coeffs.kappa[comp]->FillBoundary(periodicity);
             coeffs.Db[comp]->FillBoundary(periodicity);
             coeffs.H[comp]->FillBoundary(periodicity);
         }
@@ -644,6 +679,34 @@ namespace
     {
         dst[component]->ParallelCopy(
             *src[component], 0, 0, 1, IntVect(0), IntVect(0), periodicity);
+    }
+
+    void add_lumped_inductor_current_to_rhs (
+        MultiFab& rhs, MultiFab const& kappa,
+        int e_comp, Periodicity const& periodicity)
+    {
+        if (WarpX::use_lumped_inductor != 1) { return; }
+
+        WarpX& warpx = WarpX::GetInstance();
+        MultiFab const& current = *warpx.get_pointer_current_fp(0, e_comp);
+        MultiFab current_field = make_rhs(rhs);
+        MultiFab kappa_field = make_rhs(rhs);
+        copy_coeff_to_layout(current_field, current, periodicity);
+        copy_coeff_to_layout(kappa_field, kappa, periodicity);
+
+        for (MFIter mfi(rhs, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+            Array4<Real> const rhs_arr = rhs.array(mfi);
+            Array4<Real const> const current_arr = current_field.const_array(mfi);
+            Array4<Real const> const kappa_arr = kappa_field.const_array(mfi);
+            Box const& bx = mfi.tilebox(rhs.ixType().toIntVect());
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                if (kappa_arr(i,j,k) > 0._rt) {
+                    // The tridiagonal equations are normalized by Cb^L.
+                    rhs_arr(i,j,k) -= current_arr(i,j,k);
+                }
+            });
+        }
     }
 
     // First half-step RHS: implicit Ex along y.
@@ -683,6 +746,8 @@ namespace
                     - r * c.inv_dx * c.inv_dy * ey_hi;
             });
         }
+        add_lumped_inductor_current_to_rhs(
+            rhs, *mat.kappa[0], 0, periodicity);
         add_soft_e_source_to_rhs(rhs, cb_field, 0, source_time);
         return rhs;
     }
@@ -724,6 +789,8 @@ namespace
                     - r * c.inv_dy * c.inv_dz * ez_hi;
             });
         }
+        add_lumped_inductor_current_to_rhs(
+            rhs, *mat.kappa[1], 1, periodicity);
         add_soft_e_source_to_rhs(rhs, cb_field, 1, source_time);
         return rhs;
     }
@@ -765,6 +832,8 @@ namespace
                     - r * c.inv_dz * c.inv_dx * ex_hi;
             });
         }
+        add_lumped_inductor_current_to_rhs(
+            rhs, *mat.kappa[2], 2, periodicity);
         add_soft_e_source_to_rhs(rhs, cb_field, 2, source_time);
         return rhs;
     }
@@ -806,6 +875,8 @@ namespace
                     - r * c.inv_dx * c.inv_dz * ez_hi;
             });
         }
+        add_lumped_inductor_current_to_rhs(
+            rhs, *mat.kappa[0], 0, periodicity);
         add_soft_e_source_to_rhs(rhs, cb_field, 0, source_time);
         return rhs;
     }
@@ -847,6 +918,8 @@ namespace
                     - r * c.inv_dy * c.inv_dx * ex_hi;
             });
         }
+        add_lumped_inductor_current_to_rhs(
+            rhs, *mat.kappa[1], 1, periodicity);
         add_soft_e_source_to_rhs(rhs, cb_field, 1, source_time);
         return rhs;
     }
@@ -888,6 +961,8 @@ namespace
                     - r * c.inv_dz * c.inv_dy * ey_hi;
             });
         }
+        add_lumped_inductor_current_to_rhs(
+            rhs, *mat.kappa[2], 2, periodicity);
         add_soft_e_source_to_rhs(rhs, cb_field, 2, source_time);
         return rhs;
     }
@@ -974,6 +1049,57 @@ namespace
         MultiFab const* pec_mask = pec_masks[1][2].get();
         solve_implicit_component(ez, rhs, Cb, Db,
                                  2, 1, c.inv_dy * c.inv_dy, pec, pec_mask);
+    }
+
+    void step_jx (MultiFab& jx, MultiFab const& ex_old, MultiFab const& ex_new,
+                  MultiFab const& kappa_x, AdiCoeffs const& c)
+    {
+        for (MFIter mfi(jx); mfi.isValid(); ++mfi) {
+            auto const jx_arr = jx.array(mfi);
+            auto const ex_old_arr = ex_old.const_array(mfi);
+            auto const ex_new_arr = ex_new.const_array(mfi);
+            auto const kappa_x_arr = kappa_x.const_array(mfi);
+            Box const& b = mfi.validbox();
+            ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                jx_arr(i,j,k) += c.dtd4 * kappa_x_arr(i,j,k)
+                    * (ex_new_arr(i,j,k) + ex_old_arr(i,j,k));
+            });
+        }
+    }
+
+    void step_jy (MultiFab& jy, MultiFab const& ey_old, MultiFab const& ey_new,
+                  MultiFab const& kappa_y, AdiCoeffs const& c)
+    {
+        for (MFIter mfi(jy); mfi.isValid(); ++mfi) {
+            auto const jy_arr = jy.array(mfi);
+            auto const ey_old_arr = ey_old.const_array(mfi);
+            auto const ey_new_arr = ey_new.const_array(mfi);
+            auto const kappa_y_arr = kappa_y.const_array(mfi);
+            Box const& b = mfi.validbox();
+            ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                jy_arr(i,j,k) += c.dtd4 * kappa_y_arr(i,j,k)
+                    * (ey_new_arr(i,j,k) + ey_old_arr(i,j,k));
+            });
+        }
+    }
+
+    void step_jz (MultiFab& jz, MultiFab const& ez_old, MultiFab const& ez_new,
+                  MultiFab const& kappa_z, AdiCoeffs const& c)
+    {
+        for (MFIter mfi(jz); mfi.isValid(); ++mfi) {
+            auto const jz_arr = jz.array(mfi);
+            auto const ez_old_arr = ez_old.const_array(mfi);
+            auto const ez_new_arr = ez_new.const_array(mfi);
+            auto const kappa_z_arr = kappa_z.const_array(mfi);
+            Box const& b = mfi.validbox();
+            ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                jz_arr(i,j,k) += c.dtd4 * kappa_z_arr(i,j,k)
+                    * (ez_new_arr(i,j,k) + ez_old_arr(i,j,k));
+            });
+        }
     }
 
     void step_bx (MultiFab& bx, MultiFab const& ey, MultiFab const& ez, AdiCoeffs const& c)
@@ -1067,6 +1193,17 @@ namespace
         fill_periodic(Efield, periodicity);
         pin_pec_tangential_e(Efield, pec);
 
+        if (WarpX::use_lumped_inductor == 1) {
+            WarpX& warpx = WarpX::GetInstance();
+            step_jx(*warpx.get_pointer_current_fp(0, 0),
+                    Ex0, *Efield[0], *mat.kappa[0], c);
+            step_jy(*warpx.get_pointer_current_fp(0, 1),
+                    Ey0, *Efield[1], *mat.kappa[1], c);
+            step_jz(*warpx.get_pointer_current_fp(0, 2),
+                    Ez0, *Efield[2], *mat.kappa[2], c);
+            warpx.FillBoundaryJ(warpx.getngEB());
+        }
+
         step_bx(*Bfield[0], *Efield[1], Ez0, c);
         step_by(*Bfield[1], *Efield[2], Ex0, c);
         step_bz(*Bfield[2], *Efield[0], Ey0, c);
@@ -1122,6 +1259,17 @@ namespace
         fill_periodic(Efield, periodicity);
         pin_pec_tangential_e(Efield, pec);
 
+        if (WarpX::use_lumped_inductor == 1) {
+            WarpX& warpx = WarpX::GetInstance();
+            step_jx(*warpx.get_pointer_current_fp(0, 0),
+                    Exh, *Efield[0], *mat.kappa[0], c);
+            step_jy(*warpx.get_pointer_current_fp(0, 1),
+                    Eyh, *Efield[1], *mat.kappa[1], c);
+            step_jz(*warpx.get_pointer_current_fp(0, 2),
+                    Ezh, *Efield[2], *mat.kappa[2], c);
+            warpx.FillBoundaryJ(warpx.getngEB());
+        }
+
         step_bx(*Bfield[0], Eyh, *Efield[2], c);
         step_by(*Bfield[1], Ezh, *Efield[0], c);
         step_bz(*Bfield[2], Exh, *Efield[1], c);
@@ -1168,6 +1316,7 @@ FiniteDifferenceSolver::MacroscopicEvolveADI (
     c.inv_dz = 1._rt / dz;
     c.dt = dt;
     c.dtd2 = 0.5_rt * dt;
+    c.dtd4 = 0.25_rt * dt;
 
     pin_pec_tangential_e(Efield, pec);
     apply_pec_mask(Efield);

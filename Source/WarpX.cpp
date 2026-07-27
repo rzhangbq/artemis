@@ -1265,8 +1265,14 @@ WarpX::ReadParameters ()
         if (field_gathering_algo == GatheringAlgo::MomentumConserving) galerkin_interpolation = false;
 
         em_solver_medium = GetAlgorithmInteger(pp_algo, "em_solver_medium");
+        macroscopic_time_integrator_algo =
+            GetAlgorithmInteger(pp_algo, "time_stepping_scheme");
+        WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+            macroscopic_time_integrator_algo != MacroscopicTimeSteppingScheme::ADI ||
+            em_solver_medium == MediumForEM::Macroscopic,
+            "algo.time_stepping_scheme=adi requires "
+            "algo.em_solver_medium=macroscopic.");
         if (em_solver_medium == MediumForEM::Macroscopic ) {
-            macroscopic_time_integrator_algo = GetAlgorithmInteger(pp_algo,"time_stepping_scheme");
             macroscopic_solver_algo = GetAlgorithmInteger(pp_algo,"macroscopic_sigma_method");
         }
         // Read field excitation flags and parsers
