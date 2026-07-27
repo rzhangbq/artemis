@@ -104,6 +104,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Keep the DC/zero-frequency bin in the spectrum.",
     )
+    parser.add_argument(
+        "--fft-pad",
+        type=float,
+        default=5.0,
+        help="zero-pad factor before FFT (>=1; 1 = no padding). Default: 5",
+    )
     return parser.parse_args()
 
 
@@ -248,6 +254,7 @@ def frequency_spectrum(
     times: np.ndarray,
     values: np.ndarray,
     keep_dc: bool,
+    fft_pad: float = 1.0,
 ) -> tuple[np.ndarray, np.ndarray]:
     if times.size < 2:
         return np.asarray([]), np.asarray([])
@@ -263,9 +270,12 @@ def frequency_spectrum(
         dt = float(uniform_times[1] - uniform_times[0])
 
     signal = values if keep_dc else values - np.mean(values)
-    frequencies = np.fft.rfftfreq(signal.size, d=dt)
-    amplitude = np.abs(np.fft.rfft(signal)) / signal.size
-    if signal.size > 2:
+    n_orig = signal.size
+    n_fft = max(n_orig, int(np.ceil(n_orig * fft_pad)))
+    frequencies = np.fft.rfftfreq(n_fft, d=dt)
+    # Normalize by original length so amplitudes stay comparable across pad factors.
+    amplitude = np.abs(np.fft.rfft(signal, n=n_fft)) / n_orig
+    if n_orig > 2:
         amplitude[1:-1] *= 2.0
 
     if keep_dc:
@@ -279,6 +289,8 @@ def main() -> None:
         raise ValueError("--stride must be at least 1")
     if args.workers < 1:
         raise ValueError("--workers must be at least 1")
+    if args.fft_pad < 1.0:
+        raise ValueError("--fft-pad must be >= 1")
 
     components = tuple(dict.fromkeys(args.components))
     cell_index = tuple(args.index) if args.index is not None else None
@@ -318,6 +330,7 @@ def main() -> None:
                 times,
                 values[component],
                 args.keep_dc,
+                args.fft_pad,
             )
             if frequencies.size:
                 ax_freq.plot(frequencies * 1.0e-9, amplitudes, label=label, linewidth=1.6)
