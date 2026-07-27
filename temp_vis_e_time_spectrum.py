@@ -22,13 +22,13 @@ from tqdm import tqdm
 
 
 SERIES = (
-    ("FDTD CFL=0.8", Path("run_archive_nonresona_7_5_e10_n/diags_fdtd_08")),
-    # ("ADI CFL=1.6", Path("run_archive_nonresona_7_5_e10_n/diags_adi_16")),
-    ("ADI CFL=3.2", Path("run_archive_nonresona_7_5_e10_n/diags_adi_32")),
-    ("ADI CFL=6.4", Path("run_archive_nonresona_7_5_e10_n/diags_adi_64")),
-    ("ADI CFL=12.8", Path("run_archive_nonresona_7_5_e10_n/diags_adi_128")),
-    ("ADI CFL=25.6", Path("run_archive_nonresona_7_5_e10_n/diags_adi_256")),
-    ("ADI CFL=51.2", Path("run_archive_nonresona_7_5_e10_n/diags_adi_512")),
+    ("FDTD CFL=0.8", "diags_fdtd_08"),
+    # ("ADI CFL=1.6", "diags_adi_16"),
+    ("ADI CFL=3.2", "diags_adi_32"),
+    ("ADI CFL=6.4", "diags_adi_64"),
+    ("ADI CFL=12.8", "diags_adi_128"),
+    ("ADI CFL=25.6", "diags_adi_256"),
+    ("ADI CFL=51.2", "diags_adi_512"),
 )
 PLANES = {
     "xy": (0, 1, 2),
@@ -43,6 +43,12 @@ logging.getLogger("yt").setLevel(logging.ERROR)
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--prefix",
+        type=Path,
+        default=Path("run_archive"),
+        help="directory containing the diag_* folders",
+    )
     parser.add_argument(
         "--components",
         nargs="+",
@@ -279,7 +285,8 @@ def main() -> None:
     if cell_index is not None and any(idx < 0 for idx in cell_index):
         raise ValueError("--index values must be non-negative")
 
-    all_paths = [sorted_plotfiles(directory)[:: args.stride] for _, directory in SERIES]
+    series = [(label, args.prefix / name) for label, name in SERIES]
+    all_paths = [sorted_plotfiles(directory)[:: args.stride] for _, directory in series]
     loaded, location = preload_series(
         all_paths,
         components,
@@ -290,7 +297,7 @@ def main() -> None:
     )
     data = [
         (label, times, values)
-        for (label, _), (times, values) in zip(SERIES, loaded, strict=True)
+        for (label, _), (times, values) in zip(series, loaded, strict=True)
     ]
     # Angle brackets denote a spatial average; point samples omit them.
     def field_label(component: str) -> str:
