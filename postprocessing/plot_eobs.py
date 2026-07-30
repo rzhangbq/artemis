@@ -11,7 +11,11 @@ from pathlib import Path
 if __package__ is None:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from postprocessing.common import add_output_dpi_args, configure_matplotlib
+from postprocessing.common import (
+    add_output_dpi_args,
+    configure_matplotlib,
+    resolve_output_path,
+)
 
 configure_matplotlib()
 
@@ -25,8 +29,9 @@ from postprocessing.series import (
 )
 from postprocessing.spectrum import (
     add_spectrum_args,
+    apply_freq_range,
     frequency_spectrum,
-    validate_fft_pad,
+    validate_spectrum_args,
 )
 
 DEFAULT_NAMES = ("Eobs0.txt", "Eobs1.txt")
@@ -72,11 +77,15 @@ def load_eobs(path: Path, xcol: int, ycol: int) -> tuple[np.ndarray, np.ndarray]
 
 def main() -> None:
     args = parse_args()
-    validate_fft_pad(args.fft_pad)
+    validate_spectrum_args(args.fft_pad, args.freq_range)
 
     names = tuple(args.names)
     series = resolve_series(
-        args.prefix, args.auto_series, DEFAULT_SERIES, require_reducedfiles=True
+        args.prefix,
+        args.auto_series,
+        DEFAULT_SERIES,
+        selected=args.series,
+        require_reducedfiles=True,
     )
     print(f"Series ({len(series)}): {', '.join(label for label, _ in series)}")
 
@@ -132,15 +141,17 @@ def main() -> None:
         ax_freq.grid(True, alpha=0.3)
         if args.log_spectrum:
             ax_freq.set_yscale("log")
+        apply_freq_range(ax_freq, args.freq_range)
         if row == 0:
             ax_time.legend(loc="best", fontsize="small")
             if ax_freq.lines:
                 ax_freq.legend(loc="best", fontsize="small")
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(args.output, dpi=args.dpi)
+    output = resolve_output_path(args.output, args.prefix)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output, dpi=args.dpi)
     plt.close(fig)
-    print(f"Wrote {args.output}")
+    print(f"Wrote {output}")
 
 
 if __name__ == "__main__":

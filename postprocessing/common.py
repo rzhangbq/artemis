@@ -125,5 +125,18 @@ def add_output_dpi_args(
     default_output: Path,
     default_dpi: int = 180,
 ) -> None:
-    parser.add_argument("--output", type=Path, default=default_output)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=default_output,
+        help="output path; --prefix directory name is appended before the extension",
+    )
     parser.add_argument("--dpi", type=int, default=default_dpi)
+
+
+def resolve_output_path(output: Path, prefix: Path) -> Path:
+    """Append ``_{prefix.name}`` before the file extension (unless already present)."""
+    suffix_tag = f"_{prefix.name}"
+    if output.stem.endswith(suffix_tag):
+        return output
+    return output.with_name(f"{output.stem}{suffix_tag}{output.suffix}")

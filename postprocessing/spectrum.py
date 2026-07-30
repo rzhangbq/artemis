@@ -57,8 +57,29 @@ def add_spectrum_args(parser: argparse.ArgumentParser) -> None:
         default=5.0,
         help="zero-pad factor before FFT (>=1; 1 = no padding). Default: 5",
     )
+    parser.add_argument(
+        "--freq-range",
+        nargs=2,
+        type=float,
+        metavar=("FMIN", "FMAX"),
+        default=None,
+        help="frequency-axis plot limits in plot units "
+        "(GHz when the time column is in seconds)",
+    )
 
 
-def validate_fft_pad(fft_pad: float) -> None:
+def validate_spectrum_args(fft_pad: float, freq_range: list[float] | None) -> None:
     if fft_pad < 1.0:
         raise ValueError("--fft-pad must be >= 1")
+    if freq_range is not None and freq_range[0] >= freq_range[1]:
+        raise ValueError("--freq-range requires FMIN < FMAX")
+
+
+def apply_freq_range(ax, freq_range: list[float] | None) -> None:
+    if freq_range is not None:
+        ax.set_xlim(float(freq_range[0]), float(freq_range[1]))
+
+
+# Backward-compatible alias used by older call sites.
+def validate_fft_pad(fft_pad: float) -> None:
+    validate_spectrum_args(fft_pad, None)

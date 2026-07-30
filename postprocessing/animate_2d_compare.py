@@ -20,6 +20,7 @@ from postprocessing.common import (
     configure_matplotlib,
     configure_yt,
     panel_layout,
+    resolve_output_path,
     shared_clim,
     sorted_plotfiles,
 )
@@ -70,7 +71,11 @@ def main() -> None:
         raise ValueError("--workers must be at least 1")
 
     series_dirs = resolve_series(
-        args.prefix, args.auto_series, DEFAULT_SERIES, require_plotfiles=True
+        args.prefix,
+        args.auto_series,
+        DEFAULT_SERIES,
+        selected=args.series,
+        require_plotfiles=True,
     )
     print(f"Series ({len(series_dirs)}): {', '.join(label for label, _ in series_dirs)}")
     series = series_directories(args.prefix, series_dirs)
@@ -158,7 +163,8 @@ def main() -> None:
     title = fig.suptitle(
         f"{args.variable} on {args.plane} plane, t = {times[0]:.3e} s"
     )
-    args.output.parent.mkdir(parents=True, exist_ok=True)
+    output = resolve_output_path(args.output, args.prefix)
+    output.parent.mkdir(parents=True, exist_ok=True)
     writer = FFMpegWriter(
         fps=args.fps,
         bitrate=7200,
@@ -170,7 +176,7 @@ def main() -> None:
             "pad=ceil(iw/2)*2:ceil(ih/2)*2",
         ),
     )
-    with writer.saving(fig, args.output, dpi=args.dpi):
+    with writer.saving(fig, output, dpi=args.dpi):
         for frame_index in tqdm(range(n_frames), desc="Rendering"):
             slices = [frames[frame_index] for frames in all_slices]
             vmin, vmax = shared_clim(slices, signed)
@@ -184,7 +190,7 @@ def main() -> None:
             writer.grab_frame()
 
     plt.close(fig)
-    print(f"Wrote {args.output}")
+    print(f"Wrote {output}")
     print(f"Series: {n_series}")
     print(f"Frames: {n_frames}")
     print(f"Workers: {args.workers}")

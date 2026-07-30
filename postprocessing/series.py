@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import argparse
 import re
+from collections.abc import Sequence
 from pathlib import Path
 
-# Fallback when --no-auto-series is used.
+# Fallback when --no-auto-series is used (and --series is not set).
 DEFAULT_SERIES: tuple[tuple[str, str], ...] = (
     ("FDTD CFL=0.8", "diags_fdtd_08"),
     ("ADI CFL=1.6", "diags_adi_16"),
@@ -64,14 +65,51 @@ def discover_series(
     return tuple(found)
 
 
+def series_from_names(
+    prefix: Path,
+    names: Sequence[str],
+    *,
+    require_plotfiles: bool = False,
+    require_reducedfiles: bool = False,
+) -> tuple[tuple[str, str], ...]:
+    """Build (label, dirname) pairs from explicit directory names, in given order."""
+    if not names:
+        raise ValueError("--series requires at least one directory name")
+    if not prefix.is_dir():
+        raise FileNotFoundError(f"prefix not found: {prefix.resolve()}")
+
+    found: list[tuple[str, str]] = []
+    for name in names:
+        path = prefix / name
+        if not path.is_dir():
+            raise FileNotFoundError(f"series directory not found: {path.resolve()}")
+        if require_plotfiles and not any(path.glob("plt*")):
+            raise FileNotFoundError(f"no plotfiles in series directory: {path.resolve()}")
+        if require_reducedfiles and not (path / "reducedfiles").is_dir():
+            raise FileNotFoundError(
+                f"no reducedfiles/ in series directory: {path.resolve()}"
+            )
+        found.append((format_series_label(name), name))
+    return tuple(found)
+
+
 def resolve_series(
     prefix: Path,
     auto: bool,
     fallback: tuple[tuple[str, str], ...] = DEFAULT_SERIES,
     *,
+    selected: Sequence[str] | None = None,
     require_plotfiles: bool = False,
     require_reducedfiles: bool = False,
 ) -> tuple[tuple[str, str], ...]:
+    """Resolve series: --series overrides, else auto-discover, else fallback."""
+    if selected:
+        return series_from_names(
+            prefix,
+            selected,
+            require_plotfiles=require_plotfiles,
+            require_reducedfiles=require_reducedfiles,
+        )
     if auto:
         return discover_series(
             prefix,
@@ -97,9 +135,18 @@ def add_prefix_series_args(parser: argparse.ArgumentParser) -> None:
         help="directory containing the diags_* folders",
     )
     parser.add_argument(
+        "--series",
+        nargs="+",
+        default=None,
+        metavar="DIR",
+        help="explicit diags_* directory names under --prefix to plot "
+        "(order preserved; overrides --auto-series / --no-auto-series)",
+    )
+    parser.add_argument(
         "--auto-series",
         action=argparse.BooleanOptionalAction,
         default=True,
         help="discover diags_* folders under --prefix (default). "
-        "Use --no-auto-series for the built-in SERIES list.",
+        "Use --no-auto-series for the built-in SERIES list. "
+        "Ignored when --series is set.",
     )
