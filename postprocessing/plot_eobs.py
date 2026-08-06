@@ -31,6 +31,7 @@ from postprocessing.spectrum import (
     add_spectrum_args,
     apply_freq_range,
     frequency_spectrum,
+    late_window,
     validate_spectrum_args,
 )
 
@@ -60,7 +61,7 @@ def parse_args() -> argparse.Namespace:
         help="0-based column for y-axis (default: 2 = Ex)",
     )
     add_output_dpi_args(
-        parser, default_output=Path("circuit_test_run/Eobs_time_spectrum.pdf")
+        parser, default_output=Path("circuit_test_run/Eobs_time_spectrum.png")
     )
     add_spectrum_args(parser)
     return parser.parse_args()
@@ -77,7 +78,7 @@ def load_eobs(path: Path, xcol: int, ycol: int) -> tuple[np.ndarray, np.ndarray]
 
 def main() -> None:
     args = parse_args()
-    validate_spectrum_args(args.fft_pad, args.freq_range)
+    validate_spectrum_args(args.fft_pad, args.freq_range, args.late_percent)
 
     names = tuple(args.names)
     series = resolve_series(
@@ -88,6 +89,8 @@ def main() -> None:
         require_reducedfiles=True,
     )
     print(f"Series ({len(series)}): {', '.join(label for label, _ in series)}")
+    if args.late_percent < 100.0:
+        print(f"Using last {args.late_percent:g}% of timesteps")
 
     ylabel = f"column {args.ycol}" if args.ycol != 2 else "Ex"
     n_rows = len(names)
@@ -97,6 +100,9 @@ def main() -> None:
         figsize=(13.0, 3.5 * n_rows),
         constrained_layout=True,
         squeeze=False,
+    )
+    late_tag = (
+        f" (last {args.late_percent:g}%)" if args.late_percent < 100.0 else ""
     )
 
     for row, name in enumerate(names):
@@ -109,6 +115,7 @@ def main() -> None:
                 print(f"skip missing: {path}")
                 continue
             x, y = load_eobs(path, args.xcol, args.ycol)
+            x, y = late_window(x, y, args.late_percent)
             if args.xcol == 1:
                 ax_time.plot(x * 1.0e9, y, label=label, linewidth=1.4)
             else:
@@ -133,11 +140,13 @@ def main() -> None:
             ax_time.set_xlabel(f"column {args.xcol}")
             ax_freq.set_xlabel("frequency (1 / x-units)")
         ax_time.set_ylabel(ylabel)
-        ax_time.set_title(f"{args.prefix.name} / {stem} time domain")
+        ax_time.set_title(f"{args.prefix.name} / {stem} time domain{late_tag}")
         ax_time.grid(True, alpha=0.3)
 
         ax_freq.set_ylabel("amplitude")
-        ax_freq.set_title(f"{args.prefix.name} / {stem} frequency spectrum")
+        ax_freq.set_title(
+            f"{args.prefix.name} / {stem} frequency spectrum{late_tag}"
+        )
         ax_freq.grid(True, alpha=0.3)
         if args.log_spectrum:
             ax_freq.set_yscale("log")

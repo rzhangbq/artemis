@@ -7,6 +7,31 @@ import argparse
 import numpy as np
 
 
+def late_window(
+    times: np.ndarray,
+    values: np.ndarray,
+    late_percent: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Keep only the last ``late_percent`` percent of samples (time-sorted).
+
+    ``late_percent=100`` returns the full series; ``late_percent=25`` keeps the
+    final quarter of timesteps.
+    """
+    if times.size == 0:
+        return times, values
+    if not (0.0 < late_percent <= 100.0):
+        raise ValueError("--late-percent must be in (0, 100]")
+
+    order = np.argsort(times)
+    times = times[order]
+    values = values[order]
+    if late_percent >= 100.0:
+        return times, values
+
+    n_keep = max(1, int(np.ceil(times.size * late_percent / 100.0)))
+    return times[-n_keep:], values[-n_keep:]
+
+
 def frequency_spectrum(
     times: np.ndarray,
     values: np.ndarray,
@@ -66,13 +91,27 @@ def add_spectrum_args(parser: argparse.ArgumentParser) -> None:
         help="frequency-axis plot limits in plot units "
         "(GHz when the time column is in seconds)",
     )
+    parser.add_argument(
+        "--late-percent",
+        type=float,
+        default=100.0,
+        metavar="PCT",
+        help="use only the last PCT percent of timesteps for time plots and "
+        "spectra (default: 100 = full series)",
+    )
 
 
-def validate_spectrum_args(fft_pad: float, freq_range: list[float] | None) -> None:
+def validate_spectrum_args(
+    fft_pad: float,
+    freq_range: list[float] | None,
+    late_percent: float = 100.0,
+) -> None:
     if fft_pad < 1.0:
         raise ValueError("--fft-pad must be >= 1")
     if freq_range is not None and freq_range[0] >= freq_range[1]:
         raise ValueError("--freq-range requires FMIN < FMAX")
+    if not (0.0 < late_percent <= 100.0):
+        raise ValueError("--late-percent must be in (0, 100]")
 
 
 def apply_freq_range(ax, freq_range: list[float] | None) -> None:

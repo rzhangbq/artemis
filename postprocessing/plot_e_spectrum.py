@@ -40,6 +40,7 @@ from postprocessing.spectrum import (
     add_spectrum_args,
     apply_freq_range,
     frequency_spectrum,
+    late_window,
     validate_spectrum_args,
 )
 
@@ -69,7 +70,7 @@ def parse_args() -> argparse.Namespace:
     add_worker_stride_args(parser)
     add_output_dpi_args(
         parser,
-        default_output=Path("circuit_test_run/E_components_avg_time_spectrum.pdf"),
+        default_output=Path("circuit_test_run/E_components_avg_time_spectrum.png"),
     )
     add_spectrum_args(parser)
     return parser.parse_args()
@@ -81,7 +82,7 @@ def main() -> None:
         raise ValueError("--stride must be at least 1")
     if args.workers < 1:
         raise ValueError("--workers must be at least 1")
-    validate_spectrum_args(args.fft_pad, args.freq_range)
+    validate_spectrum_args(args.fft_pad, args.freq_range, args.late_percent)
 
     components = tuple(dict.fromkeys(args.components))
     cell_index = tuple(args.index) if args.index is not None else None
@@ -96,6 +97,8 @@ def main() -> None:
         require_plotfiles=True,
     )
     print(f"Series ({len(series_dirs)}): {', '.join(label for label, _ in series_dirs)}")
+    if args.late_percent < 100.0:
+        print(f"Using last {args.late_percent:g}% of timesteps")
     series = series_directories(args.prefix, series_dirs)
     all_paths = [sorted_plotfiles(directory)[:: args.stride] for _, directory in series]
     loaded, location = preload_field_series(
@@ -115,6 +118,9 @@ def main() -> None:
         # Angle brackets denote a spatial average; point samples omit them.
         return component if cell_index is not None else f"<{component}>"
 
+    late_tag = (
+        f" (last {args.late_percent:g}%)" if args.late_percent < 100.0 else ""
+    )
     fig, axes = plt.subplots(
         len(components),
         2,
@@ -125,10 +131,11 @@ def main() -> None:
     for row, component in enumerate(components):
         ax_time, ax_freq = axes[row]
         for label, times, values in data:
-            ax_time.plot(times * 1.0e9, values[component], label=label, linewidth=1.6)
+            t_win, y_win = late_window(times, values[component], args.late_percent)
+            ax_time.plot(t_win * 1.0e9, y_win, label=label, linewidth=1.6)
             frequencies, amplitudes = frequency_spectrum(
-                times,
-                values[component],
+                t_win,
+                y_win,
                 args.keep_dc,
                 args.fft_pad,
             )
@@ -138,12 +145,12 @@ def main() -> None:
                 )
 
         ylabel = field_label(component)
-        ax_time.set_title(f"{ylabel} at {location} in time domain")
+        ax_time.set_title(f"{ylabel} at {location} in time domain{late_tag}")
         ax_time.set_xlabel("time (ns)")
         ax_time.set_ylabel(ylabel)
         ax_time.grid(True, alpha=0.3)
 
-        ax_freq.set_title(f"{ylabel} at {location} frequency spectrum")
+        ax_freq.set_title(f"{ylabel} at {location} frequency spectrum{late_tag}")
         ax_freq.set_xlabel("frequency (GHz)")
         ax_freq.set_ylabel("amplitude")
         ax_freq.grid(True, alpha=0.3)
@@ -163,10 +170,11 @@ def main() -> None:
     print(f"Wrote {output}")
     print(f"Location: {location}")
     print(f"Workers: {args.workers}")
-    for label, times, _ in data:
+    for label, times, values in data:
+        t_win, _ = late_window(times, values[components[0]], args.late_percent)
         print(
-            f"{label}: {times.size} samples, "
-            f"t=[{times.min() * 1.0e9:.3e}, {times.max() * 1.0e9:.3e}] ns"
+            f"{label}: {t_win.size}/{times.size} samples, "
+            f"t=[{t_win.min() * 1.0e9:.3e}, {t_win.max() * 1.0e9:.3e}] ns"
         )
 
 
