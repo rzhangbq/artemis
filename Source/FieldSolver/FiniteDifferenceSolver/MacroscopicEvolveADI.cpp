@@ -530,6 +530,14 @@ namespace
         }
     }
 
+    void fill_boundary_and_sync (FieldArray const& field,
+                                 Periodicity const& periodicity)
+    {
+        for (auto const& component : field) {
+            component->FillBoundaryAndSync(periodicity);
+        }
+    }
+
     void update_material_coeffs (
         AdiMaterialCoeffs& coeffs,
         FieldArray const& Bfield,
@@ -639,29 +647,11 @@ namespace
             }
         }
 
-        for (int comp = 0; comp < 3; ++comp) {
-            coeffs.Cb[comp]->FillBoundary(periodicity);
-            coeffs.p[comp]->FillBoundary(periodicity);
-            coeffs.kappa[comp]->FillBoundary(periodicity);
-            coeffs.Db[comp]->FillBoundary(periodicity);
-            coeffs.H[comp]->FillBoundary(periodicity);
-        }
-    }
-
-    void fill_periodic (FieldArray& field,
-                        Periodicity const& periodicity)
-    {
-        for (auto& component : field) {
-            component->FillBoundary(periodicity);
-        }
-    }
-
-    void fill_periodic (std::array<MultiFab*, 3> const& field,
-                        Periodicity const& periodicity)
-    {
-        for (auto* component : field) {
-            component->FillBoundary(periodicity);
-        }
+        fill_boundary_and_sync(coeffs.Cb, periodicity);
+        fill_boundary_and_sync(coeffs.p, periodicity);
+        fill_boundary_and_sync(coeffs.kappa, periodicity);
+        fill_boundary_and_sync(coeffs.Db, periodicity);
+        fill_boundary_and_sync(coeffs.H, periodicity);
     }
 
     void copy_fields (FieldArray& dst, FieldArray const& src,
@@ -1190,7 +1180,7 @@ namespace
         copy_field_component(Efield, Efield_adi[2], 1, periodicity);
         copy_field_component(Efield, Efield_adi[0], 2, periodicity);
 
-        fill_periodic(Efield, periodicity);
+        fill_boundary_and_sync(Efield, periodicity);
         pin_pec_tangential_e(Efield, pec);
 
         if (WarpX::use_lumped_inductor == 1) {
@@ -1208,7 +1198,7 @@ namespace
         step_by(*Bfield[1], *Efield[2], Ex0, c);
         step_bz(*Bfield[2], *Efield[0], Ey0, c);
 
-        fill_periodic(Bfield, periodicity);
+        fill_boundary_and_sync(Bfield, periodicity);
     }
 
     void adi_second_half_step (
@@ -1227,8 +1217,6 @@ namespace
         MultiFab Exh = make_copy(*Efield[0]);
         MultiFab Eyh = make_copy(*Efield[1]);
         MultiFab Ezh = make_copy(*Efield[2]);
-        std::array<MultiFab*, 3> Eh = {&Exh, &Eyh, &Ezh};
-        fill_periodic(Eh, periodicity);
 
         copy_fields(Efield_adi[2], Efield, periodicity);
         copy_fields(Bfield_adi[2], mat.H, periodicity);
@@ -1256,7 +1244,7 @@ namespace
         copy_field_component(Efield, Efield_adi[0], 1, periodicity);
         copy_field_component(Efield, Efield_adi[1], 2, periodicity);
 
-        fill_periodic(Efield, periodicity);
+        fill_boundary_and_sync(Efield, periodicity);
         pin_pec_tangential_e(Efield, pec);
 
         if (WarpX::use_lumped_inductor == 1) {
@@ -1274,7 +1262,7 @@ namespace
         step_by(*Bfield[1], Ezh, *Efield[0], c);
         step_bz(*Bfield[2], Exh, *Efield[1], c);
 
-        fill_periodic(Bfield, periodicity);
+        fill_boundary_and_sync(Bfield, periodicity);
     }
 }
 
@@ -1320,8 +1308,8 @@ FiniteDifferenceSolver::MacroscopicEvolveADI (
 
     pin_pec_tangential_e(Efield, pec);
     apply_pec_mask(Efield);
-    fill_periodic(Efield, periodicity);
-    fill_periodic(Bfield, periodicity);
+    fill_boundary_and_sync(Efield, periodicity);
+    fill_boundary_and_sync(Bfield, periodicity);
 
     AdiMaterialCoeffs mat;
     define_material_coeffs(Efield, Bfield, mat);
