@@ -41,6 +41,7 @@ from postprocessing.spectrum import (
     apply_freq_range,
     frequency_spectrum,
     late_window,
+    mark_peak_frequency,
     validate_spectrum_args,
 )
 
@@ -140,9 +141,24 @@ def main() -> None:
                 args.fft_pad,
             )
             if frequencies.size:
-                ax_freq.plot(
-                    frequencies * 1.0e-9, amplitudes, label=label, linewidth=1.6
+                freq_plot = frequencies * 1.0e-9
+                (line,) = ax_freq.plot(
+                    freq_plot, amplitudes, label=label, linewidth=1.6
                 )
+                peak = mark_peak_frequency(
+                    ax_freq,
+                    freq_plot,
+                    amplitudes,
+                    freq_range=args.freq_range,
+                    color=line.get_color(),
+                    label=label,
+                    freq_unit="GHz",
+                )
+                if peak is not None:
+                    print(
+                        f"{component} / {label}: peak f={peak[0]:.6g} GHz, "
+                        f"amp={peak[1]:.3e}"
+                    )
 
         ylabel = field_label(component)
         ax_time.set_title(f"{ylabel} at {location} in time domain{late_tag}")

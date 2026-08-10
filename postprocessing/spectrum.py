@@ -119,6 +119,59 @@ def apply_freq_range(ax, freq_range: list[float] | None) -> None:
         ax.set_xlim(float(freq_range[0]), float(freq_range[1]))
 
 
+def peak_frequency(
+    frequencies: np.ndarray,
+    amplitudes: np.ndarray,
+    freq_range: list[float] | None = None,
+) -> tuple[float, float] | None:
+    """Return ``(f_peak, amp_peak)`` within an optional plot-unit frequency window."""
+    if frequencies.size == 0:
+        return None
+    mask = np.isfinite(frequencies) & np.isfinite(amplitudes)
+    if freq_range is not None:
+        fmin, fmax = float(freq_range[0]), float(freq_range[1])
+        mask &= (frequencies >= fmin) & (frequencies <= fmax)
+    if not np.any(mask):
+        return None
+    freqs = frequencies[mask]
+    amps = amplitudes[mask]
+    idx = int(np.argmax(amps))
+    return float(freqs[idx]), float(amps[idx])
+
+
+def mark_peak_frequency(
+    ax,
+    frequencies: np.ndarray,
+    amplitudes: np.ndarray,
+    *,
+    freq_range: list[float] | None = None,
+    color=None,
+    label: str | None = None,
+    freq_unit: str = "GHz",
+) -> tuple[float, float] | None:
+    """Mark the spectrum peak with a point, dashed line, and frequency annotation."""
+    peak = peak_frequency(frequencies, amplitudes, freq_range)
+    if peak is None:
+        return None
+    f_peak, a_peak = peak
+    ax.plot(f_peak, a_peak, "o", color=color, markersize=5, zorder=5)
+    ax.axvline(f_peak, color=color, linestyle="--", linewidth=0.9, alpha=0.7, zorder=4)
+    text = f"{f_peak:.3g} {freq_unit}"
+    if label:
+        text = f"{label}: {text}"
+    ax.annotate(
+        text,
+        xy=(f_peak, a_peak),
+        xytext=(6, 8),
+        textcoords="offset points",
+        fontsize="x-small",
+        color=color,
+        ha="left",
+        va="bottom",
+    )
+    return peak
+
+
 # Backward-compatible alias used by older call sites.
 def validate_fft_pad(fft_pad: float) -> None:
     validate_spectrum_args(fft_pad, None)

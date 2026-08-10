@@ -32,6 +32,7 @@ from postprocessing.spectrum import (
     apply_freq_range,
     frequency_spectrum,
     late_window,
+    mark_peak_frequency,
     validate_spectrum_args,
 )
 
@@ -126,11 +127,28 @@ def main() -> None:
             )
             if frequencies.size:
                 if args.xcol == 1:
-                    ax_freq.plot(
-                        frequencies * 1.0e-9, amplitudes, label=label, linewidth=1.4
-                    )
+                    freq_plot = frequencies * 1.0e-9
+                    freq_unit = "GHz"
                 else:
-                    ax_freq.plot(frequencies, amplitudes, label=label, linewidth=1.4)
+                    freq_plot = frequencies
+                    freq_unit = "1/x"
+                (line,) = ax_freq.plot(
+                    freq_plot, amplitudes, label=label, linewidth=1.4
+                )
+                peak = mark_peak_frequency(
+                    ax_freq,
+                    freq_plot,
+                    amplitudes,
+                    freq_range=args.freq_range,
+                    color=line.get_color(),
+                    label=label,
+                    freq_unit=freq_unit,
+                )
+                if peak is not None:
+                    print(
+                        f"{stem} / {label}: peak f={peak[0]:.6g} {freq_unit}, "
+                        f"amp={peak[1]:.3e}"
+                    )
             print(f"{stem} / {label}: {path}  N={x.size}")
 
         if args.xcol == 1:
