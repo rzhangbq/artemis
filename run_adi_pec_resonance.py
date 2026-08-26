@@ -85,7 +85,7 @@ warpx.Ex_excitation_flag_function(x,y,z) = "flag_none"
 warpx.Ey_excitation_flag_function(x,y,z) = "flag_soft"
 warpx.Ez_excitation_flag_function(x,y,z) = "flag_none"
 warpx.Ex_excitation_grid_function(x,y,z,t) = "0.0"
-warpx.Ey_excitation_grid_function(x,y,z,t) = "E0*(dt/TP)*sin(pi*z/L)*exp(-(t-3*TP)**2/(2*TP**2))*sin(0.75*2*pi*freq*t)"
+warpx.Ey_excitation_grid_function(x,y,z,t) = "E0*(dt/TP)*sin(pi*z/L)*exp(-(t-3*TP)**2/(2*TP**2))*sin(2*pi*freq*t)"
 warpx.Ez_excitation_grid_function(x,y,z,t) = "0.0"
 """
 

@@ -28,7 +28,7 @@ WORKDIR = Path("adi_dispersion/artemis_cavity3d_te")
 # Original reference parameters (explicit Yee Courant limit).
 FREQ = 2.0e9  # Hz
 DT_COURANT = 5.8e-12  # s
-TP = 300.0 * DT_COURANT  # 1.74 ns
+TP = 30.0 * DT_COURANT  # 0.174 ns; 10x wider bandwidth than the original pulse
 NSTEPS = 10000
 CFL = 1.0
 
