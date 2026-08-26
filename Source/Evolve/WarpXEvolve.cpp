@@ -500,7 +500,7 @@ WarpX::OneStep_nosub (Real cur_time)
         EvolveB(0.5_rt * dt[0], DtType::FirstHalf); // We now have B^{n+1/2}
         FillBoundaryB(guard_cells.ng_FieldSolver, WarpX::sync_nodal_points);
         // ApplyExternalFieldExcitation
-        ApplyExternalFieldExcitationOnGrid(ExternalFieldType::BfieldExternal, DtType::FirstHalf); // apply B external excitation; soft source to be fixed
+        ApplyExternalFieldExcitationOnGrid(ExternalFieldType::BfieldExternal, DtType::FirstHalf); // B soft/hard at t^{n+1/2}
 #endif
 
 #ifdef WARPX_MAG_LLG
@@ -560,7 +560,7 @@ WarpX::OneStep_nosub (Real cur_time)
 #ifndef WARPX_MAG_LLG
         EvolveB(0.5_rt * dt[0], DtType::SecondHalf); // We now have B^{n+1}
         // ApplyExternalFieldExcitation
-        ApplyExternalFieldExcitationOnGrid(ExternalFieldType::BfieldExternal, DtType::SecondHalf); // redundant for hs; need to fix the way to increment ss
+        ApplyExternalFieldExcitationOnGrid(ExternalFieldType::BfieldExternal, DtType::SecondHalf); // B soft/hard at t^{n+1}
 #endif
         }
 

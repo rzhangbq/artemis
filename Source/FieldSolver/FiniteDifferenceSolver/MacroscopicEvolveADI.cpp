@@ -492,6 +492,9 @@ namespace
                 if (flag_type > 2._rt) {
                     amrex::Abort("flag type for excitation must be <= 2");
                 } else if (flag_type == 2._rt) {
+                    // Flag=2 is a soft *field* increment (E += 1/2 S), not an
+                    // Ampère current. Divide by Cb so the contribution to E is
+                    // independent of the material prefactor on the RHS curl terms.
                     rhs_arr(i,j,k) +=
                         0.5_rt * field_parser(x, y, z, time) / cb_arr(i,j,k);
                 } else if (flag_type > 0._rt) {
@@ -1316,8 +1319,12 @@ FiniteDifferenceSolver::MacroscopicEvolveADI (
     update_material_coeffs(mat, Bfield, dt, periodicity, macroscopic_properties);
 
     WarpX& warpx = WarpX::GetInstance();
-    Real const first_e_source_time = warpx.gett_new(0) + 0.25_rt * dt;
-    Real const second_e_source_time = warpx.gett_new(0) + 0.75_rt * dt;
+    // Soft field sources (flag=2) are timed at the arrival levels of each
+    // half-step, like a hard Dirichlet value: S^{n+1/2} then S^{n+1}.
+    // (Quarter-steps n+1/4, n+3/4 would be appropriate only for a continuous
+    // Ampère current centered on each half-interval.)
+    Real const first_e_source_time = warpx.gett_new(0) + 0.5_rt * dt;
+    Real const second_e_source_time = warpx.gett_new(0) + dt;
 
     adi_first_half_step(
         Efield, Bfield, Efield_adi, Bfield_adi, c, mat, periodicity, pec, PEC_adi,

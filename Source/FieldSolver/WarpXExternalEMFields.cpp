@@ -124,7 +124,16 @@ WarpX::ApplyExternalFieldExcitationOnGrid (
         mfy_stag[idim] = mfy->ixType()[idim];
         mfz_stag[idim] = mfz->ixType()[idim];
     }
+    // Sample the excitation at the field arrival time for this stage.
+    // Soft field sources (flag=2) are increments at those levels, so
+    // FirstHalf -> t^{n+1/2}, SecondHalf -> t^{n+1}. Full keeps t^n
+    // (used e.g. for the t=0 hard-source application before any evolve).
     amrex::Real t = gett_new(lev);
+    if (a_dt_type == DtType::FirstHalf) {
+        t += 0.5_rt * dt[lev];
+    } else if (a_dt_type == DtType::SecondHalf) {
+        t += dt[lev];
+    }
     const auto problo = Geom(lev).ProbLoArray();
     const auto dx = Geom(lev).CellSizeArray();
     amrex::IntVect x_nodal_flag = mfx->ixType().toIntVect();
