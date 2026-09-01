@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Compare PEC soft-drive vs standing-wave IC: magnitude and CFL sensitivity."""
+"""Compare PEC soft-drive vs standing-wave IC: spectral peak and dispersion vs CFL."""
 
 from __future__ import annotations
 
 import importlib.util
 import math
 import os
-import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -36,19 +34,18 @@ CASES = {
 }
 CFLS = resonance.VERIFY_CFLS
 OUT = ROOT / "adi_dispersion/pec_soft_vs_standing_cfl.png"
+STYLES = {
+    "soft_drive": ("C0", "x", "Soft drive"),
+    "standing_ic": ("C1", "o", "Standing IC"),
+}
 
 
 def metrics(times: np.ndarray, ey: np.ndarray) -> dict[str, float]:
-    i0 = len(times) // 2
-    t, y = times[i0:], ey[i0:]
-    y0 = y - np.mean(y)
     freqs, amp = resonance.compute_fft(times, ey)
     peak_i = 1 + int(np.argmax(amp[1:]))
     _lz, _nz, k, _kh = resonance.mode_grid("pec")
     f0 = resonance.C0 * k / (2.0 * math.pi)
     return {
-        "peak_abs": float(np.max(np.abs(y0))),
-        "rms": float(np.sqrt(np.mean(y0**2))),
         "fft_peak": float(amp[peak_i]),
         "f_over_f0": float(freqs[peak_i] / f0),
     }
@@ -58,29 +55,24 @@ def run_case(label: str, mod, workdir: Path, exe: Path) -> dict[float, dict[str,
     workdir.mkdir(parents=True, exist_ok=True)
     out: dict[float, dict[str, float]] = {}
     print(f"\n=== {label} ({workdir.name}) ===")
-    print(f"{'CFL':>8} {'peak|E|':>12} {'rms':>12} {'FFT peak':>12} {'f/f0':>10}")
+    print(f"{'CFL':>8} {'FFT peak':>12} {'f/f0':>10}")
     for cfl in CFLS:
         case_dir = mod.run_artemis_case("pec", cfl, workdir, exe, reuse=False)
         times, ey = mod.read_probe(case_dir)
         m = metrics(times, ey)
         out[cfl] = m
-        print(
-            f"{cfl:8g} {m['peak_abs']:12.4e} {m['rms']:12.4e} "
-            f"{m['fft_peak']:12.4e} {m['f_over_f0']:10.6f}"
-        )
+        print(f"{cfl:8g} {m['fft_peak']:12.4e} {m['f_over_f0']:10.6f}")
     return out
 
 
 def plot(results: dict[str, dict[float, dict[str, float]]]) -> None:
-    fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.2))
-    styles = {"soft_drive": ("C0", "o", "Soft drive"), "standing_ic": ("C1", "s", "Standing IC")}
+    fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.2))
     x = np.asarray(CFLS)
 
-    for key, (color, marker, label) in styles.items():
+    for key, (color, marker, label) in STYLES.items():
         r = results[key]
-        axes[0].loglog(x, [r[c]["peak_abs"] for c in CFLS], marker + "-", color=color, ms=7, label=label)
+        axes[0].loglog(x, [r[c]["fft_peak"] for c in CFLS], marker + "-", color=color, ms=7, label=label)
         axes[1].semilogx(x, [r[c]["f_over_f0"] for c in CFLS], marker + "-", color=color, ms=7, label=label)
-        axes[2].loglog(x, [r[c]["fft_peak"] for c in CFLS], marker + "-", color=color, ms=7, label=label)
 
     kh = resonance.mode_grid("pec")[3]
     s = np.logspace(np.log10(min(CFLS)), np.log10(max(CFLS)), 200)
@@ -89,8 +81,8 @@ def plot(results: dict[str, dict[float, dict[str, float]]]) -> None:
     axes[1].axhline(1.0, color="0.5", ls=":", lw=1)
 
     axes[0].set_xlabel("CFL $S$")
-    axes[0].set_ylabel(r"peak $|\int E_y|$ (last half)")
-    axes[0].set_title("Time-domain amplitude")
+    axes[0].set_ylabel(r"$|\mathrm{FFT}|/N$ peak")
+    axes[0].set_title("Spectral peak magnitude")
     axes[0].grid(alpha=0.25, which="both")
     axes[0].legend(frameon=False)
 
@@ -100,13 +92,9 @@ def plot(results: dict[str, dict[float, dict[str, float]]]) -> None:
     axes[1].grid(alpha=0.25, which="both")
     axes[1].legend(frameon=False, fontsize=9)
 
-    axes[2].set_xlabel("CFL $S$")
-    axes[2].set_ylabel(r"$|\mathrm{FFT}|/N$ peak")
-    axes[2].set_title("Spectral peak magnitude")
-    axes[2].grid(alpha=0.25, which="both")
-    axes[2].legend(frameon=False)
-
-    fig.suptitle(r"PEC: soft external drive vs standing-wave IC ($k\Delta z\approx2.15\times10^{-3}$)", fontsize=12)
+    fig.suptitle(
+        rf"PEC: soft drive vs standing IC ($k\Delta z={resonance.KH_LABEL}$)", fontsize=12
+    )
     fig.tight_layout()
     fig.savefig(OUT, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -116,12 +104,10 @@ def plot(results: dict[str, dict[float, dict[str, float]]]) -> None:
 def cfl_spread(results: dict[str, dict[float, dict[str, float]]]) -> None:
     print("\n=== CFL sensitivity (max/min ratio across CFLs) ===")
     for key in results:
-        peaks = [results[key][c]["peak_abs"] for c in CFLS]
         fft_peaks = [results[key][c]["fft_peak"] for c in CFLS]
         freqs = [results[key][c]["f_over_f0"] for c in CFLS]
         print(
-            f"{key:12s}  |E| ratio={max(peaks)/min(peaks):.3g}  "
-            f"FFT ratio={max(fft_peaks)/min(fft_peaks):.3g}  "
+            f"{key:12s}  FFT ratio={max(fft_peaks)/min(fft_peaks):.3g}  "
             f"f/f0 spread={max(freqs)-min(freqs):.4f}"
         )
 

@@ -31,7 +31,7 @@ LENGTH_Z = 8.0e-6
 KH = 2.0 * math.pi / NZ  # = π/1464 ≈ 2.146e-3
 KH_LABEL = format(KH, ".3e").replace("e-0", "e-")  # "2.146e-3"
 N_TRANS = BLOCKING_FACTOR  # thin transverse
-VERIFY_CFLS = [float(4**i) for i in range(2, 6)]  # 16, 64, ..., 1024
+VERIFY_CFLS = [64.0, 128.0, 256.0, 512.0]
 N_PERIODS = 16.0
 SAMPLES_PER_PERIOD = 16
 FFT_PAD_FACTOR = 8  # zero-pad FFT length to pad_factor * n_window
