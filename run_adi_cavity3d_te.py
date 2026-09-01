@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""3D PEC air cavity (original Courant case): explicit FDTD vs ADI at CFL=1."""
+"""3D PEC air cavity: FDTD at CFL=1 vs ADI at CFL = 1, 2, 4, 8."""
 
 from __future__ import annotations
 
@@ -26,19 +26,20 @@ EXE = Path("Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex")
 WORKDIR = Path("adi_dispersion/artemis_cavity3d_te")
 
 # Original reference parameters (explicit Yee Courant limit).
-FREQ = 2.0e9  # Hz
+FREQ = 3.0e9  # Hz
 DT_COURANT = 5.8e-12  # s
-TP = 30.0 * DT_COURANT  # 0.174 ns; 10x wider bandwidth than the original pulse
-NSTEPS = 10000
-CFL = 1.0
+TP = 30.0 * DT_COURANT  # 0.174 ns; broadband pulse
+NSTEPS_CFL1 = 10000  # physical duration fixed: T = NSTEPS_CFL1 * DT_COURANT
 
 LX, LY, LZ = 9.0e-2, 6.0e-2, 15.0e-2
 DX = DY = DZ = 0.3e-2
 NX, NY, NZ = int(round(LX / DX)), int(round(LY / DY)), int(round(LZ / DZ))  # 30, 20, 50
 
-SCHEMES = ("fdtd", "adi")  # macroscopic Yee FDTD vs ADI
-TE_PEAKS_GHZ = [1.95, 2.60, 3.42, 4.31]
-PLOT_INTERVAL = 100
+# FDTD only at Courant; ADI scanned in powers of 4.
+FDTD_CFLS = (1.0,)
+ADI_CFLS = ()
+
+PLOT_INTERVAL = -1
 PROBE_INTERVAL = 1
 
 INPUT_TEMPLATE = """\
@@ -87,8 +88,8 @@ my_constants.dx = {dx:.17e}
 my_constants.dy = {dy:.17e}
 my_constants.dz = {dz:.17e}
 
-# Soft Ey line source along y at cavity center (original: E += pulse*cos).
-# (dt/dt0)=1 at CFL=1; kept for consistency with larger-CFL ADI runs.
+# Soft Ey line source off-center (L/3.5) so even-m / even-p TE modes couple.
+# Scale by dt/dt0 so total soft-field drive is independent of CFL.
 warpx.E_excitation_on_grid_style = parse_E_excitation_grid_function
 warpx.Ex_excitation_flag_function(x,y,z) = "flag_none"
 warpx.Ey_excitation_flag_function(x,y,z) = "flag_soft * (abs(x-x0) < dx/2) * (abs(z-z0) < dz/2)"
@@ -112,12 +113,23 @@ plt.file_prefix = plt
 """
 
 
-def case_name(scheme: str) -> str:
-    return f"{scheme}_cfl_{CFL:g}".replace(".", "p")
+def case_name(scheme: str, cfl: float) -> str:
+    return f"{scheme}_cfl_{cfl:g}".replace(".", "p")
 
 
 def te_analytic_ghz(m: int, p: int) -> float:
     return 0.5 * C0 * math.sqrt((m / LX) ** 2 + (p / LZ) ** 2) / 1.0e9
+
+
+def te_modes() -> dict[str, float]:
+    return {
+        "TE101": te_analytic_ghz(1, 1),
+        "TE102": te_analytic_ghz(1, 2),
+        "TE103": te_analytic_ghz(1, 3),
+        "TE201": te_analytic_ghz(2, 1),
+        "TE202": te_analytic_ghz(2, 2),
+        "TE104": te_analytic_ghz(1, 4),
+    }
 
 
 def read_ey_vm(case_dir: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -129,19 +141,21 @@ def read_ey_vm(case_dir: Path) -> tuple[np.ndarray, np.ndarray]:
     return data[:, 1], ey
 
 
-def run_case(scheme: str, workdir: Path, exe: Path) -> Path:
-    dt = CFL * DT_COURANT
-    x0, y0, z0 = 0.5 * LX, 0.5 * LY, 0.5 * LZ
+def run_case(scheme: str, cfl: float, workdir: Path, exe: Path) -> Path:
+    dt = cfl * DT_COURANT
+    nsteps = max(1, int(round(NSTEPS_CFL1 / cfl)))
+    # Off-center line source so even-m / even-p TE modes couple.
+    x0, y0, z0 = LX / 3.5, 0.5 * LY, LZ / 3.5
     xp, yp, zp = x0 + 2.0 * DX, y0, z0
 
-    case_dir = workdir / case_name(scheme)
+    case_dir = workdir / case_name(scheme, cfl)
     if case_dir.exists():
         shutil.rmtree(case_dir)
     case_dir.mkdir(parents=True, exist_ok=True)
 
     (case_dir / "inputs").write_text(
         INPUT_TEMPLATE.format(
-            nsteps=NSTEPS,
+            nsteps=nsteps,
             diag_interval=PROBE_INTERVAL,
             plot_interval=PLOT_INTERVAL,
             scheme=scheme,
@@ -170,8 +184,9 @@ def run_case(scheme: str, workdir: Path, exe: Path) -> Path:
     )
 
     print(
-        f"[Artemis] scheme={scheme}, CFL={CFL:g}, N={NX}x{NY}x{NZ}, "
-        f"dt={dt:.3e} s, steps={NSTEPS}, plot={PLOT_INTERVAL}"
+        f"[Artemis] scheme={scheme}, CFL={cfl:g}, N={NX}x{NY}x{NZ}, "
+        f"dt={dt:.3e} s, steps={nsteps}, "
+        f"src=({x0:.4g},{y0:.4g},{z0:.4g})"
     )
     with (case_dir / "run.log").open("w") as log:
         subprocess.run(
@@ -196,6 +211,90 @@ def spectrum(times: np.ndarray, signal: np.ndarray) -> tuple[np.ndarray, np.ndar
     return freqs, amp
 
 
+def plot_results(
+    series: dict[str, dict[float, tuple[np.ndarray, np.ndarray]]],
+    outpath: Path,
+) -> None:
+    modes = te_modes()
+    mode_style = {
+        "TE101": dict(color="0.45", ls=":", lw=1.0),
+        "TE102": dict(color="0.45", ls=":", lw=1.0),
+        "TE103": dict(color="C3", ls="--", lw=1.6),
+        "TE201": dict(color="C4", ls="-.", lw=1.6),
+        "TE202": dict(color="0.45", ls=":", lw=1.0),
+        "TE104": dict(color="0.45", ls=":", lw=1.0),
+    }
+
+    fig, axes = plt.subplots(2, 1, figsize=(10.0, 8.0), sharex=False)
+
+    # FDTD reference
+    t_f, ey_f = series["fdtd"][1.0]
+    axes[0].plot(t_f * 1.0e9, ey_f, color="k", lw=1.1, label=r"FDTD $S=1$")
+    axes[1].plot(*spectrum(t_f, ey_f), color="k", lw=1.6, label=r"FDTD $S=1$")
+
+    cmap = plt.cm.viridis
+    for i, cfl in enumerate(ADI_CFLS):
+        color = cmap(i / max(1, len(ADI_CFLS) - 1))
+        t, ey = series["adi"][cfl]
+        axes[0].plot(
+            t * 1.0e9,
+            ey,
+            color=color,
+            lw=1.0,
+            label=fr"ADI $S={cfl:g}$",
+        )
+        freqs, amp = spectrum(t, ey)
+        axes[1].plot(freqs, amp, color=color, lw=1.4, label=fr"ADI $S={cfl:g}$")
+
+    axes[0].set_xlabel(r"Time [ns]")
+    axes[0].set_ylabel(r"Electric Field $E_y$ [V/m]")
+    axes[0].set_title(r"$E_y$ probe near off-center source ($L/3.5$; air cavity)")
+    axes[0].grid(alpha=0.25)
+    axes[0].legend(frameon=False, fontsize=8, ncol=2)
+
+    ymax = 0.0
+    for scheme in series:
+        for cfl in series[scheme]:
+            ymax = max(ymax, float(np.max(spectrum(*series[scheme][cfl])[1])))
+
+    for name, fte in modes.items():
+        st = mode_style[name]
+        axes[1].axvline(
+            fte,
+            color=st["color"],
+            ls=st["ls"],
+            lw=st["lw"],
+            alpha=0.9,
+            label=fr"{name} ${fte:.3f}$ GHz",
+        )
+
+    f103, f201 = modes["TE103"], modes["TE201"]
+    axes[1].annotate(
+        fr"$\Delta f={1000.0 * (f201 - f103):.0f}$ MHz",
+        xy=(0.5 * (f103 + f201), 0.55 * ymax),
+        xytext=(3.85, 0.75 * ymax),
+        fontsize=8,
+        arrowprops=dict(arrowstyle="->", color="0.3"),
+        color="0.2",
+    )
+
+    axes[1].set_xlim(0.0, 5.5)
+    axes[1].set_xlabel(r"Frequency [GHz]")
+    axes[1].set_ylabel(r"$|E_y|$ spectrum (arb.)")
+    axes[1].set_title(r"$E_y$ spectrum near off-center source ($L/3.5$), air cavity")
+    axes[1].grid(alpha=0.25)
+    axes[1].legend(frameon=False, fontsize=7.5, ncol=2, loc="upper right")
+
+    fig.suptitle(
+        rf"3-D PEC cavity: FDTD $S=1$ vs ADI $S\in{{{','.join(str(int(c)) for c in ADI_CFLS)}}}$ "
+        rf"($f_0={FREQ / 1e9:g}$ GHz, src at $L/3.5$)",
+        fontsize=12,
+    )
+    fig.tight_layout()
+    fig.savefig(outpath, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
 def main() -> None:
     exe = EXE.resolve()
     if not exe.exists():
@@ -203,71 +302,32 @@ def main() -> None:
 
     print(
         f"3D PEC cavity {LX}x{LY}x{LZ} m, dx={DX} m -> {NX}x{NY}x{NZ}; "
-        f"f0={FREQ/1e9:g} GHz, DT={DT_COURANT:g} s (CFL={CFL:g})"
+        f"f0={FREQ / 1e9:g} GHz, DT={DT_COURANT:g} s"
     )
+    print(f"FDTD CFLs: {FDTD_CFLS}")
+    print(f"ADI  CFLs: {ADI_CFLS}")
     print("Analytic TE_m0p [GHz]:")
-    for m, p in [(1, 1), (1, 2), (1, 3), (1, 4), (2, 1), (2, 2)]:
-        print(f"  TE_{m}0{p}: {te_analytic_ghz(m, p):.3f}")
+    for name, fte in te_modes().items():
+        print(f"  {name}: {fte:.3f}")
 
     workdir = WORKDIR.resolve()
     workdir.mkdir(parents=True, exist_ok=True)
 
-    series: dict[str, tuple[np.ndarray, np.ndarray]] = {}
-    for scheme in SCHEMES:
-        case_dir = run_case(scheme, workdir, exe)
-        series[scheme] = read_ey_vm(case_dir)
-
-    styles = {
-        "fdtd": dict(color="C0", label="FDTD (Yee)"),
-        "adi": dict(color="C1", label="ADI"),
+    series: dict[str, dict[float, tuple[np.ndarray, np.ndarray]]] = {
+        "fdtd": {},
+        "adi": {},
     }
-
-    fig, axes = plt.subplots(2, 1, figsize=(9.5, 7.5), sharex=False)
-    for scheme in SCHEMES:
-        t, ey = series[scheme]
-        axes[0].plot(
-            t * 1.0e9,
-            ey,
-            color=styles[scheme]["color"],
-            lw=1.0,
-            label=styles[scheme]["label"],
-        )
-    axes[0].set_xlabel(r"Time [ns]")
-    axes[0].set_ylabel(r"Electric Field $E_y$ [V/m]")
-    axes[0].set_title(r"$E_y$ two grids from cavity center (air cavity)")
-    axes[0].grid(alpha=0.25)
-    axes[0].legend(frameon=False, fontsize=9)
-
-    for scheme in SCHEMES:
-        freqs, amp = spectrum(*series[scheme])
-        axes[1].plot(
-            freqs,
-            amp,
-            color=styles[scheme]["color"],
-            lw=1.5,
-            label=styles[scheme]["label"],
-        )
-    for fpeak in TE_PEAKS_GHZ:
-        axes[1].axvline(fpeak, color="0.4", ls=":", lw=1.0, alpha=0.8)
-    axes[1].set_xlim(0.0, 5.5)
-    axes[1].set_xlabel(r"Frequency [GHz]")
-    axes[1].set_ylabel(r"$|E_y|$ spectrum (arb.)")
-    axes[1].set_title(r"$E_y$ field two grids away from cavity center, air cavity")
-    axes[1].grid(alpha=0.25)
-    axes[1].legend(frameon=False, fontsize=9)
-
-    fig.suptitle(
-        rf"3-D PEC cavity: FDTD vs ADI at CFL$={CFL:g}$ "
-        rf"($f_0={FREQ/1e9:g}$ GHz, $N={NSTEPS}$)",
-        fontsize=13,
-    )
-    fig.tight_layout()
+    for cfl in FDTD_CFLS:
+        case_dir = run_case("fdtd", cfl, workdir, exe)
+        series["fdtd"][cfl] = read_ey_vm(case_dir)
+    for cfl in ADI_CFLS:
+        case_dir = run_case("adi", cfl, workdir, exe)
+        series["adi"][cfl] = read_ey_vm(case_dir)
 
     outdir = Path("adi_dispersion")
     outdir.mkdir(parents=True, exist_ok=True)
     path = outdir / "cavity3d_te_fdtd_vs_adi.png"
-    fig.savefig(path, dpi=200, bbox_inches="tight")
-    plt.close(fig)
+    plot_results(series, path)
     print(path.resolve())
 
 

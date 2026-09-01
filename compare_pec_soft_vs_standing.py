@@ -44,7 +44,8 @@ def metrics(times: np.ndarray, ey: np.ndarray) -> dict[str, float]:
     y0 = y - np.mean(y)
     freqs, amp = resonance.compute_fft(times, ey)
     peak_i = 1 + int(np.argmax(amp[1:]))
-    f0 = resonance.C0 * (math.pi / resonance.LENGTH_Z) / (2.0 * math.pi)
+    _lz, _nz, k, _kh = resonance.mode_grid("pec")
+    f0 = resonance.C0 * k / (2.0 * math.pi)
     return {
         "peak_abs": float(np.max(np.abs(y0))),
         "rms": float(np.sqrt(np.mean(y0**2))),

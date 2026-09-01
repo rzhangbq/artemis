@@ -24,13 +24,13 @@ MU0 = 1.25663706212e-6
 
 EXE = Path("Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex")
 WORKDIR = Path("adi_dispersion/artemis_pec_kh2p15e-3")
-# PEC fundamental: Ey ~ sin(π z / L) on domain L => k = π/L, kΔz = π/Nz.
-# Periodic comparison: double L and Nz so one full wavelength has the same k and kΔz.
+# Full-wavelength domain; same L and Nz for PEC and periodic (kΔz = 2π/Nz).
 BLOCKING_FACTOR = 8
-NZ = BLOCKING_FACTOR * int(round((math.pi / 2.15e-3) / BLOCKING_FACTOR))  # 1464
-KH = math.pi / NZ  # exact simulation kΔz (analytic curves use this, not a rounded target)
+NZ = 2 * 1464  # 2928 cells on L = 8 µm
+LENGTH_Z = 8.0e-6
+KH = 2.0 * math.pi / NZ  # = π/1464 ≈ 2.146e-3
+KH_LABEL = format(KH, ".3e").replace("e-0", "e-")  # "2.146e-3"
 N_TRANS = BLOCKING_FACTOR  # thin transverse
-LENGTH_Z = 4.0e-6  # PEC cavity length; periodic uses 2*LENGTH_Z
 VERIFY_CFLS = [float(4**i) for i in range(2, 6)]  # 16, 64, ..., 1024
 N_PERIODS = 16.0
 SAMPLES_PER_PERIOD = 16
@@ -86,7 +86,7 @@ warpx.Ex_excitation_flag_function(x,y,z) = "flag_none"
 warpx.Ey_excitation_flag_function(x,y,z) = "flag_soft"
 warpx.Ez_excitation_flag_function(x,y,z) = "flag_none"
 warpx.Ex_excitation_grid_function(x,y,z,t) = "0.0"
-warpx.Ey_excitation_grid_function(x,y,z,t) = "E0*(dt/TP)*sin(pi*z/L)*exp(-(t-3*TP)**2/(2*TP**2))*sin(2*pi*freq*t)"
+warpx.Ey_excitation_grid_function(x,y,z,t) = "E0*(dt/TP)*sin(2*pi*z/L)*exp(-(t-3*TP)**2/(2*TP**2))*sin(2*pi*freq*t)"
 warpx.Ez_excitation_grid_function(x,y,z,t) = "0.0"
 """
 
@@ -104,7 +104,7 @@ warpx.Bz_external_grid_function(x,y,z) = "0.0"
 """
 
 PROBE = """\
-# Midplane surface probe: integral of E over the z=L/2 face (dx dy).
+# Surface probe at z=L/4 (Ey antinode for sin(2πz/L)): integral over that face.
 warpx.reduced_diags_names = Eobs0
 Eobs0.type = RawEFieldReduction
 Eobs0.reduction_type = integral
@@ -116,19 +116,11 @@ Eobs0.reduced_function(x,y,z) = (z > z0 - dz/2) * (z < z0 + dz/2)
 
 
 def mode_grid(mode: str) -> tuple[float, int, float, float]:
-    """Return (lz, nz, k, kh) with matched k and kh for both modes.
-
-    PEC: half-wave on [0, L], k = π/L, Nz cells.
-    Periodic: one full wavelength on [0, 2L] with 2 Nz cells => same k, dz, kh.
-    """
-    if mode == "pec":
-        lz, nz = LENGTH_Z, NZ
-        k = math.pi / lz
-    elif mode == "periodic":
-        lz, nz = 2.0 * LENGTH_Z, 2 * NZ
-        k = 2.0 * math.pi / lz
-    else:
+    """Return (lz, nz, k, kh); PEC and periodic share one full-wavelength grid."""
+    if mode not in MODES:
         raise ValueError(mode)
+    lz, nz = LENGTH_Z, NZ
+    k = 2.0 * math.pi / lz
     kh = k * (lz / nz)
     return lz, nz, k, kh
 
@@ -180,7 +172,7 @@ def build_inputs(mode: str, **kwargs) -> str:
 
 
 def read_probe(case_dir: Path) -> tuple[np.ndarray, np.ndarray]:
-    """Return (time, Ey) from the RawEFieldReduction midplane diagnostic."""
+    """Return (time, Ey) from the RawEFieldReduction surface diagnostic."""
     path = case_dir / "diags" / "reducedfiles" / "Eobs0.txt"
     if not path.exists():
         raise FileNotFoundError(path)
@@ -240,14 +232,14 @@ def run_artemis_case(
             c0=C0,
             freq=f0,
             tp=t0,
-            z0=0.5 * lz,
+            z0=0.25 * lz,
             dz=dz,
         )
     )
 
     cmd = [str(exe), str(inputs)]
     print(
-        f"[Artemis] {mode} CFL={cfl:g}, N={nx}x{ny}x{nz}, L={lz:g}, kh={kh:.6e}, "
+        f"[Artemis] {mode} CFL={cfl:g}, N={nx}x{ny}x{nz}, L={lz:g}, kh={KH_LABEL}, "
         f"f0={f0:.6e} Hz, steps={nsteps}, diag={diag_interval}"
     )
     log_path = case_dir / "run.log"
@@ -302,11 +294,11 @@ def plot_resonance_histories(
     titles = {
         "pec": (
             rf"PEC soft drive ($L$, $N_z={NZ}$, "
-            rf"$k\Delta z={KH:.6e}$)"
+            rf"$k\Delta z={KH_LABEL}$)"
         ),
         "periodic": (
-            rf"Periodic sine IC ($2L$, $N_z={2*NZ}$, "
-            rf"$k\Delta z={KH:.6e}$)"
+            rf"Periodic sine IC ($L$, $N_z={NZ}$, "
+            rf"$k\Delta z={KH_LABEL}$)"
         ),
     }
 
@@ -326,7 +318,7 @@ def plot_resonance_histories(
             )
         t_ref = series[mode][VERIFY_CFLS[0]][0]
         ax_t.axvline(t_ref[len(t_ref) // 2] * f0, color="k", ls=":", lw=1.0, alpha=0.6)
-        ax_t.set_ylabel(r"$\int E_y\,\mathrm{d}x\,\mathrm{d}y$ (midplane)")
+        ax_t.set_ylabel(r"$\int E_y\,\mathrm{d}x\,\mathrm{d}y$ ($z=L/4$)")
         ax_t.set_title(titles[mode] + " — time")
         ax_t.grid(alpha=0.25)
         ax_t.legend(frameon=False, fontsize=8, ncol=2)
@@ -359,7 +351,7 @@ def plot_resonance_histories(
     axes[1, 0].set_xlabel(r"$t\,f_0$")
     axes[1, 1].set_xlabel(r"$f / f_0$")
     fig.suptitle(
-        rf"1-D ADI: PEC vs periodic at matched $k\Delta z={KH:.6e}$",
+        rf"1-D ADI: PEC vs periodic at matched $k\Delta z={KH_LABEL}$",
         fontsize=13,
     )
     fig.tight_layout()
@@ -374,7 +366,7 @@ def plot_dispersion_comparison(
     """ADI f/f0 (= vp/c) vs CFL: analytical curve + Artemis FFT peaks."""
     s_max = max(VERIFY_CFLS)
     s_adi = np.logspace(-2, np.log10(s_max * 1.05), 1600)
-    kh = KH  # PEC and periodic grids share the same kΔz = π/Nz
+    kh = KH  # kΔz = 2π/Nz on the shared full-wavelength grid
 
     fig, ax = plt.subplots(figsize=(7.2, 4.8))
     vp_adi = 2.0 * np.arctan(s_adi * np.sin(kh / 2.0)) / (s_adi * kh)
@@ -383,7 +375,7 @@ def plot_dispersion_comparison(
         vp_adi,
         color="k",
         lw=2,
-        label=fr"ADI ana. $k\Delta z={KH:.6e}$",
+        label=fr"ADI ana. $k\Delta z={KH_LABEL}$",
     )
 
     style = {
@@ -433,16 +425,13 @@ def main() -> None:
         lz, nz, k, kh = mode_grid(mode)
         f0 = C0 * k / (2.0 * math.pi)
         print(
-            f"\n=== {mode}: L={lz:g} m, Nz={nz}, kh={kh:.6e}, f0={f0:.6e} Hz ==="
+            f"\n=== {mode}: L={lz:g} m, Nz={nz}, kh={KH_LABEL}, f0={f0:.6e} Hz ==="
         )
         print(
             f"{'CFL':>8} {'f_peak/f0':>12} {'f_adi/f0':>12} {'rel err':>12} {'n samples':>10}"
         )
         for cfl in VERIFY_CFLS:
-            # Re-run PEC after dt-normalized soft source; reuse periodic IC cases.
-            case_dir = run_artemis_case(
-                mode, cfl, workdir, exe, reuse=(mode == "periodic")
-            )
+            case_dir = run_artemis_case(mode, cfl, workdir, exe, reuse=False)
             times, ey = read_probe(case_dir)
             series[mode][cfl] = (times, ey)
             f_peak = peak_frequency(times, ey)
@@ -457,11 +446,11 @@ def main() -> None:
     outdir = Path("adi_dispersion")
     outdir.mkdir(parents=True, exist_ok=True)
 
-    path_res = outdir / "pec_resonance_vs_cfl.png"
+    path_res = outdir / "pec_soft_resonance_vs_cfl.png"
     plot_resonance_histories(series, path_res)
     print(path_res.resolve())
 
-    path_disp = outdir / "pec_dispersion_vs_cfl.png"
+    path_disp = outdir / "pec_soft_dispersion_vs_cfl.png"
     plot_dispersion_comparison(f_over_f0, path_disp)
     print(path_disp.resolve())
 
