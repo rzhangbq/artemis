@@ -24,11 +24,12 @@ MU0 = 1.25663706212e-6
 
 EXE = Path("Bin/main3d.gnu.TPROF.MTMPI.CUDA.ex")
 WORKDIR = Path("adi_dispersion/artemis_pec_kh2p15e-3")
-# PEC fundamental: Ey ~ sin(π z / L) on domain L => k = π/L, kh = π/Nz.
-# Periodic comparison: double L and Nz so one full wavelength has the same k and kh.
-KH_TARGET = 2.15e-3
-NZ = 8 * int(round((math.pi / KH_TARGET) / 8.0))  # 1464 → kh ≈ 2.1456e-3
-N_TRANS = 8  # thin transverse; blocking_factor=8
+# PEC fundamental: Ey ~ sin(π z / L) on domain L => k = π/L, kΔz = π/Nz.
+# Periodic comparison: double L and Nz so one full wavelength has the same k and kΔz.
+BLOCKING_FACTOR = 8
+NZ = BLOCKING_FACTOR * int(round((math.pi / 2.15e-3) / BLOCKING_FACTOR))  # 1464
+KH = math.pi / NZ  # exact simulation kΔz (analytic curves use this, not a rounded target)
+N_TRANS = BLOCKING_FACTOR  # thin transverse
 LENGTH_Z = 4.0e-6  # PEC cavity length; periodic uses 2*LENGTH_Z
 VERIFY_CFLS = [float(4**i) for i in range(2, 6)]  # 16, 64, ..., 1024
 N_PERIODS = 16.0
@@ -130,6 +131,10 @@ def mode_grid(mode: str) -> tuple[float, int, float, float]:
         raise ValueError(mode)
     kh = k * (lz / nz)
     return lz, nz, k, kh
+
+
+assert abs(mode_grid("pec")[3] - KH) < 1e-15
+assert abs(mode_grid("periodic")[3] - KH) < 1e-15
 
 
 def case_name(mode: str, cfl: float) -> str:
@@ -297,11 +302,11 @@ def plot_resonance_histories(
     titles = {
         "pec": (
             rf"PEC soft drive ($L$, $N_z={NZ}$, "
-            rf"$k\Delta z={mode_grid('pec')[3]:.3g}$)"
+            rf"$k\Delta z={KH:.6e}$)"
         ),
         "periodic": (
             rf"Periodic sine IC ($2L$, $N_z={2*NZ}$, "
-            rf"$k\Delta z={mode_grid('periodic')[3]:.3g}$)"
+            rf"$k\Delta z={KH:.6e}$)"
         ),
     }
 
@@ -354,7 +359,7 @@ def plot_resonance_histories(
     axes[1, 0].set_xlabel(r"$t\,f_0$")
     axes[1, 1].set_xlabel(r"$f / f_0$")
     fig.suptitle(
-        rf"1-D ADI: PEC vs periodic at matched $k\Delta z={mode_grid('pec')[3]:.3g}$",
+        rf"1-D ADI: PEC vs periodic at matched $k\Delta z={KH:.6e}$",
         fontsize=13,
     )
     fig.tight_layout()
@@ -369,7 +374,7 @@ def plot_dispersion_comparison(
     """ADI f/f0 (= vp/c) vs CFL: analytical curve + Artemis FFT peaks."""
     s_max = max(VERIFY_CFLS)
     s_adi = np.logspace(-2, np.log10(s_max * 1.05), 1600)
-    kh = mode_grid("pec")[3]  # matched for both modes
+    kh = KH  # PEC and periodic grids share the same kΔz = π/Nz
 
     fig, ax = plt.subplots(figsize=(7.2, 4.8))
     vp_adi = 2.0 * np.arctan(s_adi * np.sin(kh / 2.0)) / (s_adi * kh)
@@ -378,7 +383,7 @@ def plot_dispersion_comparison(
         vp_adi,
         color="k",
         lw=2,
-        label=fr"ADI ana. $k\Delta z={kh:.3g}$",
+        label=fr"ADI ana. $k\Delta z={KH:.6e}$",
     )
 
     style = {
