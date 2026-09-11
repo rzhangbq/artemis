@@ -187,7 +187,7 @@ def plotfiles(case_dir: Path) -> list[Path]:
 
 def e_error_at_time(
     plotfile: Path, n: int, length: float, amplitude: float, direction: str
-) -> tuple[int, float, float, float, float, tuple[int, int, int]]:
+) -> tuple[int, float, float, float, tuple[int, int, int]]:
     e_comp, _, _, _ = WAVE_CONFIG[direction]
     axis = {"x": 0, "y": 1, "z": 2}[direction]
 
@@ -211,7 +211,6 @@ def e_error_at_time(
         time,
         float(np.mean(err * err)),
         float(np.max(abs_err)),
-        float(np.percentile(abs_err, 99.9)),
         max_index,
     )
 
@@ -223,7 +222,7 @@ def space_time_error(
     amplitude: float,
     expected_samples: int,
     direction: str,
-) -> tuple[float, float, float, int, float, tuple[int, int, int]]:
+) -> tuple[float, float, int, float, tuple[int, int, int]]:
     samples = []
     for plotfile in plotfiles(case_dir):
         samples.append(e_error_at_time(plotfile, n, length, amplitude, direction))
@@ -250,14 +249,12 @@ def space_time_error(
     mean_square_errors = np.array([sample[2] for sample in samples])
     l2_space_time = math.sqrt(float(np.mean(mean_square_errors)))
     worst = max(samples, key=lambda sample: sample[3])
-    p999 = max(sample[4] for sample in samples)
     return (
         l2_space_time / amplitude,
         worst[3] / amplitude,
-        p999 / amplitude,
         worst[0],
         worst[1],
-        worst[5],
+        worst[4],
     )
 
 
@@ -271,17 +268,16 @@ def observed_orders(errors: list[float]) -> list[float]:
 
 def print_table(
     direction: str,
-    rows: list[tuple[int, int, int, float, float, float, int, float, tuple[int, int, int]]],
+    rows: list[tuple[int, int, int, float, float, int, float, tuple[int, int, int]]],
 ) -> list[float]:
     l2_orders = observed_orders([row[3] for row in rows])
     linf_orders = observed_orders([row[4] for row in rows])
-    p999_orders = observed_orders([row[5] for row in rows])
     e_comp = WAVE_CONFIG[direction][0]
 
     print(
         f"\n=== propagation +{direction} (error in {e_comp}) ===\n"
-        "  N  steps plt_int   rel_L2_xt   order  rel_p99.9_xt   order"
-        "    rel_Linf_xt   order  worst_step  worst_ijk"
+        "  N  steps plt_int   rel_L2_xt   order    rel_Linf_xt   order"
+        "  worst_step  worst_ijk"
     )
     for i, (
         n,
@@ -289,25 +285,23 @@ def print_table(
         plot_interval,
         l2,
         linf,
-        p999,
         worst_step,
         _worst_time,
         worst_index,
     ) in enumerate(rows):
         p2 = "" if i == 0 else f"{l2_orders[i - 1]:7.3f}"
         pinf = "" if i == 0 else f"{linf_orders[i - 1]:7.3f}"
-        pp999 = "" if i == 0 else f"{p999_orders[i - 1]:7.3f}"
         print(
             f"{n:3d} {nsteps:6d} {plot_interval:7d} "
-            f"{l2:11.4e} {p2:>7} {p999:13.4e} {pp999:>7}"
-            f" {linf:13.4e} {pinf:>7} {worst_step:11d}  {worst_index}"
+            f"{l2:11.4e} {p2:>7} {linf:13.4e} {pinf:>7} "
+            f"{worst_step:11d}  {worst_index}"
         )
     return l2_orders
 
 
 def plot_convergence(
     all_rows: dict[
-        str, list[tuple[int, int, int, float, float, float, int, float, tuple[int, int, int]]]
+        str, list[tuple[int, int, int, float, float, int, float, tuple[int, int, int]]]
     ],
     output: Path,
 ) -> None:
@@ -320,10 +314,8 @@ def plot_convergence(
         h = 1.0 / cells
         l2 = np.array([row[3] for row in rows])
         linf = np.array([row[4] for row in rows])
-        p999 = np.array([row[5] for row in rows])
 
         ax.loglog(h, l2, "o-", label="L2")
-        ax.loglog(h, p999, "^-", label="p99.9")
         ax.loglog(h, linf, "s-", label="Linf")
 
         for order, style in [(1, "--"), (2, ":")]:
@@ -344,7 +336,7 @@ def plot_convergence(
 
 def run_direction(
     args: argparse.Namespace, exe: Path, workdir: Path, direction: str
-) -> list[tuple[int, int, int, float, float, float, int, float, tuple[int, int, int]]]:
+) -> list[tuple[int, int, int, float, float, int, float, tuple[int, int, int]]]:
     dir_workdir = workdir / f"prop_{direction}"
     dir_workdir.mkdir(parents=True, exist_ok=True)
 
@@ -361,11 +353,11 @@ def run_direction(
         )
         subprocess.run(cmd, cwd=case_dir, check=True)
 
-        l2, linf, p999, worst_step, worst_time, worst_index = space_time_error(
+        l2, linf, worst_step, worst_time, worst_index = space_time_error(
             case_dir, n, args.length, args.amplitude, args.time_samples, direction
         )
         rows.append(
-            (n, nsteps, plot_interval, l2, linf, p999, worst_step, worst_time, worst_index)
+            (n, nsteps, plot_interval, l2, linf, worst_step, worst_time, worst_index)
         )
     return rows
 
