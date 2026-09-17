@@ -304,6 +304,10 @@ public:
      *  (A=0, B=1, C=2, D=3; see AdiEExcitation)
      */
     static int adi_e_excitation;
+    /** Integer that selects how a soft B/H source is added on ADI magnetic half-steps
+     *  (A=0, B=1, C=2, D=3; see AdiBExcitation)
+     */
+    static int adi_b_excitation;
     /** Integers that correspond to boundary condition applied to fields at the
      *  lower domain boundaries
      *  (0 to 6 correspond to PML, Periodic, PEC, PMC, Damped, Absorbing Silver-Mueller, None)

@@ -529,6 +529,76 @@ namespace
         }
     }
 
+    void add_soft_b_source (FieldArray& Bfield, int half_step)
+    {
+        if (WarpX::B_excitation_grid_s != "parse_b_excitation_grid_function") {
+            return;
+        }
+
+        int const scheme = WarpX::adi_b_excitation;
+        Real time_frac = 0.5_rt;
+        Real weight = 1._rt;
+        bool active = false;
+        if (scheme == AdiBExcitation::A) {
+            active = (half_step == 1);
+        } else if (scheme == AdiBExcitation::B) {
+            active = (half_step == 2);
+        } else if (scheme == AdiBExcitation::C) {
+            active = true;
+            weight = 0.5_rt;
+        } else if (scheme == AdiBExcitation::D) {
+            active = true;
+            weight = 0.5_rt;
+            time_frac = (half_step == 1) ? 0.25_rt : 0.75_rt;
+        }
+        if (!active) { return; }
+
+        WarpX& warpx = WarpX::GetInstance();
+        Real const time = warpx.gett_new(0) + time_frac * warpx.getdt(0);
+        auto const problo = warpx.Geom(0).ProbLoArray();
+        auto const dx = warpx.Geom(0).CellSizeArray();
+
+        for (int b_comp = 0; b_comp < 3; ++b_comp) {
+            MultiFab& B = *Bfield[b_comp];
+            auto const field_parser =
+                (b_comp == 0) ? warpx.Bxfield_xt_grid_parser->compile<4>() :
+                (b_comp == 1) ? warpx.Byfield_xt_grid_parser->compile<4>() :
+                                warpx.Bzfield_xt_grid_parser->compile<4>();
+            auto const flag_parser =
+                (b_comp == 0) ? warpx.Bxfield_flag_parser->compile<3>() :
+                (b_comp == 1) ? warpx.Byfield_flag_parser->compile<3>() :
+                                warpx.Bzfield_flag_parser->compile<3>();
+
+            GpuArray<int, 3> b_stag;
+            for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+                b_stag[idim] = B.ixType()[idim];
+            }
+            IntVect const nodal_flag = B.ixType().toIntVect();
+
+#ifdef AMREX_USE_OMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+            for (MFIter mfi(B, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+                Array4<Real> const b_arr = B.array(mfi);
+                Box const& bx = mfi.tilebox(nodal_flag);
+                ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+                {
+                    Real x, y, z;
+                    WarpXUtilAlgo::getCellCoordinates(i, j, k, b_stag, problo, dx, x, y, z);
+                    Real const flag_type = flag_parser(x, y, z);
+                    if (flag_type > 2._rt) {
+                        amrex::Abort("flag type for excitation must be <= 2");
+                    } else if (flag_type == 2._rt) {
+                        b_arr(i,j,k) += weight * field_parser(x, y, z, time);
+                    } else if (flag_type > 0._rt) {
+                        amrex::Abort(
+                            "Macroscopic ADI does not support hard magnetic sources.");
+                    }
+                });
+            }
+        }
+    }
+
     MultiFab make_copy (MultiFab const& mf)
     {
         MultiFab copy(mf.boxArray(), mf.DistributionMap(), 1, mf.nGrowVect(),
@@ -1335,14 +1405,14 @@ FiniteDifferenceSolver::MacroscopicEvolveADI (
 
     warpx.FillBoundaryE(warpx.getngEB());
     warpx.FillBoundaryB(warpx.getngEB());
-    // Soft H/B source once per step, after the first magnetic half-step, at t^{n+1/2}.
-    warpx.ApplyExternalFieldExcitationOnGrid(
-        ExternalFieldType::BfieldExternal, DtType::FirstHalf, false);
+    add_soft_b_source(Bfield, 1);
+    warpx.FillBoundaryB(warpx.getngEB());
 
     update_material_coeffs(mat, Bfield, dt, periodicity, macroscopic_properties);
     adi_second_half_step(
         Efield, Bfield, Efield_adi, Bfield_adi, c, mat, periodicity, pec, PEC_adi);
 
+    add_soft_b_source(Bfield, 2);
     warpx.FillBoundaryE(warpx.getngEB());
     warpx.FillBoundaryB(warpx.getngEB());
 #endif

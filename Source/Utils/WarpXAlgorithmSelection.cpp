@@ -122,6 +122,14 @@ const std::map<std::string, int> AdiEExcitation_algo_to_int = {
     {"default", AdiEExcitation::B}
 };
 
+const std::map<std::string, int> AdiBExcitation_algo_to_int = {
+    {"a", AdiBExcitation::A},
+    {"b", AdiBExcitation::B},
+    {"c", AdiBExcitation::C},
+    {"d", AdiBExcitation::D},
+    {"default", AdiBExcitation::A}
+};
+
 const std::map<std::string, int> FieldBCType_algo_to_int = {
     {"pml",      FieldBoundaryType::PML},
     {"periodic", FieldBoundaryType::Periodic},
@@ -202,6 +210,8 @@ GetAlgorithmInteger( amrex::ParmParse& pp, const char* pp_search_key ){
         algo_to_int = MacroscopicTimeIntegrator_algo_to_int;
     } else if (0 == std::strcmp(pp_search_key, "adi_e_excitation")) {
         algo_to_int = AdiEExcitation_algo_to_int;
+    } else if (0 == std::strcmp(pp_search_key, "adi_b_excitation")) {
+        algo_to_int = AdiBExcitation_algo_to_int;
     } else if (0 == std::strcmp(pp_search_key, "reduction_type")) {
         algo_to_int = ReductionType_algo_to_int;
     } else if (0 == std::strcmp(pp_search_key, "integration_type")) {

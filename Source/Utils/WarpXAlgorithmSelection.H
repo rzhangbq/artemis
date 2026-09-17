@@ -76,6 +76,24 @@ struct AdiEExcitation {
     };
 };
 
+/**
+  * \brief Placement of a soft B/H source on the ADI magnetic half-steps.
+  *        The parser is a B increment (μ ΔH). Default A matches the previous
+  *        single full-strength application after the first magnetic half-step.
+  *        A: first half only, S^{n+1/2}
+  *        B: second half only, S^{n+1/2}
+  *        C: both halves, (1/2) S^{n+1/2}
+  *        D: both halves, (1/2) S^{n+1/4} then (1/2) S^{n+3/4}
+  */
+struct AdiBExcitation {
+    enum {
+        A = 0,
+        B = 1,
+        C = 2,
+        D = 3
+    };
+};
+
 struct GridType {
     enum {
         Collocated = 0,

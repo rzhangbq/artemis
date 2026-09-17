@@ -83,6 +83,6 @@ cmake-build-*/
 adi_dispersion/
 adi_grid_convergence/
 adi_cfl_convergence/
-adi_mms/
+adi_mms*/
 diags*
 *.log

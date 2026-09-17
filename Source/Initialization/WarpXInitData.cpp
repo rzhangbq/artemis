@@ -200,6 +200,15 @@ WarpX::PrintMainPICparameters ()
       } else if (WarpX::adi_e_excitation == AdiEExcitation::D) {
           amrex::Print() << "                      |  - ADI E source D: (1/2)S^{n+1/4}, (1/2)S^{n+3/4}\n";
       }
+      if (WarpX::adi_b_excitation == AdiBExcitation::A) {
+          amrex::Print() << "                      |  - ADI B source A: first half S^{n+1/2}\n";
+      } else if (WarpX::adi_b_excitation == AdiBExcitation::B) {
+          amrex::Print() << "                      |  - ADI B source B: second half S^{n+1/2}\n";
+      } else if (WarpX::adi_b_excitation == AdiBExcitation::C) {
+          amrex::Print() << "                      |  - ADI B source C: both halves (1/2)S^{n+1/2}\n";
+      } else if (WarpX::adi_b_excitation == AdiBExcitation::D) {
+          amrex::Print() << "                      |  - ADI B source D: (1/2)S^{n+1/4}, (1/2)S^{n+3/4}\n";
+      }
       }
     if ( (em_solver_medium == MediumForEM::Macroscopic) &&
        (WarpX::macroscopic_solver_algo == MacroscopicSolverAlgo::LaxWendroff)){

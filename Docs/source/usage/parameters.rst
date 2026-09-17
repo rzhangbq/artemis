@@ -2298,6 +2298,16 @@ Maxwell solver: macroscopic media
     - ``c``: both half-steps, add \(\tfrac12 S^{n+1/2}\) on each
     - ``d``: both half-steps, add \(\tfrac12 S^{n+1/4}\) then \(\tfrac12 S^{n+3/4}\)
 
+* ``algo.adi_b_excitation`` (`string`, optional)
+    How a soft magnetic source is added after each ADI magnetic half-step.
+    The parser ``warpx.B*_excitation_grid_function`` is a **B increment**
+    (\(\mu\Delta H\)). Used only when ``algo.time_stepping_scheme = adi``. Options are:
+
+    - ``a``: first half-step only, add \(S^{n+1/2}\) (default; previous ADI behavior)
+    - ``b``: second half-step only, add \(S^{n+1/2}\)
+    - ``c``: both half-steps, add \(\tfrac12 S^{n+1/2}\) on each
+    - ``d``: both half-steps, add \(\tfrac12 S^{n+1/4}\) then \(\tfrac12 S^{n+3/4}\)
+
 * ``macroscopic.sigma_function(x,y,z)``, ``macroscopic.epsilon_function(x,y,z)``, ``macroscopic.mu_function(x,y,z)`` (`string`)
      To initialize spatially varying conductivity, permittivity, and permeability, respectively,
      using a mathematical function in the input. Constants required in the
