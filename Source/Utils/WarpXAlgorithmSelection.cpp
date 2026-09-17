@@ -114,6 +114,14 @@ const std::map<std::string, int> MacroscopicTimeIntegrator_algo_to_int = {
     {"default", MacroscopicTimeSteppingScheme::FDTD}
 };
 
+const std::map<std::string, int> AdiEExcitation_algo_to_int = {
+    {"a", AdiEExcitation::A},
+    {"b", AdiEExcitation::B},
+    {"c", AdiEExcitation::C},
+    {"d", AdiEExcitation::D},
+    {"default", AdiEExcitation::B}
+};
+
 const std::map<std::string, int> FieldBCType_algo_to_int = {
     {"pml",      FieldBoundaryType::PML},
     {"periodic", FieldBoundaryType::Periodic},
@@ -192,6 +200,8 @@ GetAlgorithmInteger( amrex::ParmParse& pp, const char* pp_search_key ){
         algo_to_int = MacroscopicSolver_algo_to_int;
     } else if (0 == std::strcmp(pp_search_key, "time_stepping_scheme")) {
         algo_to_int = MacroscopicTimeIntegrator_algo_to_int;
+    } else if (0 == std::strcmp(pp_search_key, "adi_e_excitation")) {
+        algo_to_int = AdiEExcitation_algo_to_int;
     } else if (0 == std::strcmp(pp_search_key, "reduction_type")) {
         algo_to_int = ReductionType_algo_to_int;
     } else if (0 == std::strcmp(pp_search_key, "integration_type")) {

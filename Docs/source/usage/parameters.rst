@@ -2289,6 +2289,15 @@ Maxwell solver: macroscopic media
 
     Comparing the two methods, Lax-Wendroff is more prone to developing oscillations and requires a smaller timestep for stability. On the other hand, Backward Euler is more robust but it is first-order accurate in time compared to the second-order Lax-Wendroff method.
 
+* ``algo.adi_e_excitation`` (`string`, optional)
+    How a soft electric source is added to the macroscopic ADI electric right-hand side.
+    Used only when ``algo.time_stepping_scheme = adi``. Options are:
+
+    - ``a``: first half-step only, add \(S^{n+1/2}\)
+    - ``b``: second half-step only, add \(S^{n+1/2}\) (default)
+    - ``c``: both half-steps, add \(\tfrac12 S^{n+1/2}\) on each
+    - ``d``: both half-steps, add \(\tfrac12 S^{n+1/4}\) then \(\tfrac12 S^{n+3/4}\)
+
 * ``macroscopic.sigma_function(x,y,z)``, ``macroscopic.epsilon_function(x,y,z)``, ``macroscopic.mu_function(x,y,z)`` (`string`)
      To initialize spatially varying conductivity, permittivity, and permeability, respectively,
      using a mathematical function in the input. Constants required in the

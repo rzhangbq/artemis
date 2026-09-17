@@ -60,6 +60,22 @@ struct MacroscopicTimeSteppingScheme {
     };
 };
 
+/**
+  * \brief Placement of a soft E source on the ADI electric RHS.
+  *        A: first half only, S^{n+1/2}
+  *        B: second half only, S^{n+1/2}
+  *        C: both halves, (1/2) S^{n+1/2}
+  *        D: both halves, (1/2) S^{n+1/4} then (1/2) S^{n+3/4}
+  */
+struct AdiEExcitation {
+    enum {
+        A = 0,
+        B = 1,
+        C = 2,
+        D = 3
+    };
+};
+
 struct GridType {
     enum {
         Collocated = 0,

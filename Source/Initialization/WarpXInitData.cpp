@@ -191,6 +191,15 @@ WarpX::PrintMainPICparameters ()
     else if ((em_solver_medium == MediumForEM::Macroscopic) &&
             (WarpX::macroscopic_time_integrator_algo == MacroscopicTimeSteppingScheme::ADI)){
       amrex::Print() << "                      |  - ADI time stepping\n";
+      if (WarpX::adi_e_excitation == AdiEExcitation::A) {
+          amrex::Print() << "                      |  - ADI E source A: first half S^{n+1/2}\n";
+      } else if (WarpX::adi_e_excitation == AdiEExcitation::B) {
+          amrex::Print() << "                      |  - ADI E source B: second half S^{n+1/2}\n";
+      } else if (WarpX::adi_e_excitation == AdiEExcitation::C) {
+          amrex::Print() << "                      |  - ADI E source C: both halves (1/2)S^{n+1/2}\n";
+      } else if (WarpX::adi_e_excitation == AdiEExcitation::D) {
+          amrex::Print() << "                      |  - ADI E source D: (1/2)S^{n+1/4}, (1/2)S^{n+3/4}\n";
+      }
       }
     if ( (em_solver_medium == MediumForEM::Macroscopic) &&
        (WarpX::macroscopic_solver_algo == MacroscopicSolverAlgo::LaxWendroff)){

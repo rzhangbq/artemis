@@ -205,6 +205,7 @@ bool WarpX::do_divb_cleaning = false;
 int WarpX::em_solver_medium;
 int WarpX::macroscopic_solver_algo;
 int WarpX::macroscopic_time_integrator_algo;
+int WarpX::adi_e_excitation = AdiEExcitation::B;
 bool WarpX::do_single_precision_comms = false;
 
 bool WarpX::do_shared_mem_charge_deposition = false;
@@ -1272,6 +1273,9 @@ WarpX::ReadParameters ()
             em_solver_medium == MediumForEM::Macroscopic,
             "algo.time_stepping_scheme=adi requires "
             "algo.em_solver_medium=macroscopic.");
+        if (macroscopic_time_integrator_algo == MacroscopicTimeSteppingScheme::ADI) {
+            adi_e_excitation = GetAlgorithmInteger(pp_algo, "adi_e_excitation");
+        }
         if (em_solver_medium == MediumForEM::Macroscopic ) {
             macroscopic_solver_algo = GetAlgorithmInteger(pp_algo,"macroscopic_sigma_method");
         }

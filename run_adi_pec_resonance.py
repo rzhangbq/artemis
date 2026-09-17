@@ -58,7 +58,7 @@ warpx.do_particle_cfl_guards = 0
 
 algo.em_solver_medium = macroscopic
 algo.time_stepping_scheme = adi
-algo.macroscopic_sigma_method = laxwendroff
+{adi_e_excitation_line}algo.macroscopic_sigma_method = laxwendroff
 
 macroscopic.sigma_function(x,y,z) = "0.0"
 macroscopic.epsilon_function(x,y,z) = "{eps0:.17e}"
@@ -129,8 +129,11 @@ assert abs(mode_grid("pec")[3] - KH) < 1e-15
 assert abs(mode_grid("periodic")[3] - KH) < 1e-15
 
 
-def case_name(mode: str, cfl: float) -> str:
-    return f"{mode}_cfl_{cfl:g}".replace(".", "p")
+def case_name(mode: str, cfl: float, adi_e_excitation: str | None = None) -> str:
+    name = f"{mode}_cfl_{cfl:g}".replace(".", "p")
+    if adi_e_excitation:
+        name += f"_exc{adi_e_excitation}"
+    return name
 
 
 def build_inputs(mode: str, **kwargs) -> str:
@@ -166,6 +169,11 @@ def build_inputs(mode: str, **kwargs) -> str:
         c0=kwargs["c0"],
         z0=kwargs["z0"],
         dz=kwargs["dz"],
+        adi_e_excitation_line=(
+            f"algo.adi_e_excitation = {kwargs['adi_e_excitation']}\n"
+            if kwargs.get("adi_e_excitation")
+            else ""
+        ),
     )
     probe = PROBE.format(diag_interval=kwargs["diag_interval"])
     return header + "\n" + body + "\n" + probe
@@ -189,7 +197,8 @@ def analytical_f_over_f0(cfl: float, kh: float) -> float:
 
 
 def run_artemis_case(
-    mode: str, cfl: float, workdir: Path, exe: Path, *, reuse: bool = False
+    mode: str, cfl: float, workdir: Path, exe: Path, *, reuse: bool = False,
+    adi_e_excitation: str | None = None,
 ) -> Path:
     nx = ny = N_TRANS
     lz, nz, k, kh = mode_grid(mode)
@@ -204,7 +213,7 @@ def run_artemis_case(
     diag_interval = max(1, steps_per_period // SAMPLES_PER_PERIOD)
     nsteps = int(math.ceil(N_PERIODS * t0 / dt))
 
-    case_dir = workdir / case_name(mode, cfl)
+    case_dir = workdir / case_name(mode, cfl, adi_e_excitation)
     probe = case_dir / "diags" / "reducedfiles" / "Eobs0.txt"
     if reuse and probe.exists():
         print(f"[Artemis] reuse {mode} CFL={cfl:g}: {case_dir}")
@@ -234,12 +243,14 @@ def run_artemis_case(
             tp=t0,
             z0=0.25 * lz,
             dz=dz,
+            adi_e_excitation=adi_e_excitation,
         )
     )
 
     cmd = [str(exe), str(inputs)]
+    exc = f", exc={adi_e_excitation}" if adi_e_excitation else ""
     print(
-        f"[Artemis] {mode} CFL={cfl:g}, N={nx}x{ny}x{nz}, L={lz:g}, kh={KH_LABEL}, "
+        f"[Artemis] {mode} CFL={cfl:g}{exc}, N={nx}x{ny}x{nz}, L={lz:g}, kh={KH_LABEL}, "
         f"f0={f0:.6e} Hz, steps={nsteps}, diag={diag_interval}"
     )
     log_path = case_dir / "run.log"

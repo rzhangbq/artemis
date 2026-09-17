@@ -300,6 +300,10 @@ public:
      *  (FDTD - 0, ADI - 1)
      */
     static int macroscopic_time_integrator_algo;
+    /** Integer that selects how a soft E source is added to the ADI electric RHS
+     *  (A=0, B=1, C=2, D=3; see AdiEExcitation)
+     */
+    static int adi_e_excitation;
     /** Integers that correspond to boundary condition applied to fields at the
      *  lower domain boundaries
      *  (0 to 6 correspond to PML, Periodic, PEC, PMC, Damped, Absorbing Silver-Mueller, None)

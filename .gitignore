@@ -79,4 +79,10 @@ cmake-build-*/
 .AppleDouble
 .LSOverride
 
-.cache
+
+adi_dispersion/
+adi_grid_convergence/
+adi_cfl_convergence/
+adi_mms/
+diags*
+*.log

@@ -60,7 +60,7 @@ def parse_args() -> argparse.Namespace:
         "--direction",
         nargs="+",
         choices=["x", "y", "z"],
-        default=["x", "y", "z"],
+        default=["x"],
         help="Propagation direction(s) to test.",
     )
     parser.add_argument(
@@ -189,6 +189,7 @@ def run_case(
         and (case_dir / "inputs").exists()
         and plotfiles_complete(case_dir, cfl_args.time_samples)
     )
+    reuse = True
     if reuse:
         nsteps = nsteps_for(n, cfl_args.cfl)
         plot_interval = nsteps // cfl_args.time_samples
@@ -258,7 +259,7 @@ def plot_cfl_convergence(
         2,
         len(directions),
         figsize=(5.2 * len(directions), 8.2),
-        dpi=160,
+        dpi=700,
         squeeze=False,
         sharex=True,
     )
