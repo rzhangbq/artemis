@@ -5,9 +5,11 @@
 #include "Utils/WarpXConst.H"
 #include "WarpX.H"
 
+#include <AMReX_Box.H>
 #include <AMReX_Gpu.H>
 #include <AMReX_IntVect.H>
 #include <AMReX_MFIter.H>
+#include <AMReX_MultiFab.H>
 #include <AMReX_Print.H>
 
 #include <array>
@@ -32,6 +34,26 @@ namespace
         }
         return rho;
     }
+
+    struct AdiCfsHost
+    {
+        GpuArray<Real, AMREX_SPACEDIM> problo{};
+        GpuArray<Real, AMREX_SPACEDIM> probhi{};
+        GpuArray<Real, AMREX_SPACEDIM> dx{};
+        GpuArray<int, AMREX_SPACEDIM> n_cells{};
+        GpuArray<int, AMREX_SPACEDIM> do_lo{};
+        GpuArray<int, AMREX_SPACEDIM> do_hi{};
+        GpuArray<Real, AMREX_SPACEDIM> sigma_max{};
+        int ncell = 0;
+        int on = 0;
+        Real kappa_max = 1._rt;
+        Real alpha_max = 0._rt;
+        Real grade_m = 3._rt;
+        Real dt_half = 0._rt;
+        Real ep0 = 0._rt;
+    };
+
+    AdiCfsHost g_adi_cfs;
 }
 
 void
@@ -190,6 +212,7 @@ WarpX::FillAdiPmlProfiles ()
 void
 WarpX::UpdateAdiPmlRecursionCoeffs (Real a_dt)
 {
+    g_adi_cfs.on = 0;
     if (!adi_pml) { return; }
 
     Real const dt_half = 0.5_rt * a_dt;
@@ -205,6 +228,26 @@ WarpX::UpdateAdiPmlRecursionCoeffs (Real a_dt)
     IntVect const do_hi = adi_pml_Hi;
     Real const eta0 = std::sqrt(PhysConst::mu0 / PhysConst::ep0);
     Real const ep0 = PhysConst::ep0;
+
+    g_adi_cfs.on = 1;
+    g_adi_cfs.problo = problo;
+    g_adi_cfs.probhi = probhi;
+    g_adi_cfs.dx = dx;
+    g_adi_cfs.ncell = ncell;
+    g_adi_cfs.kappa_max = adi_pml_kappa_max;
+    g_adi_cfs.alpha_max = alpha_max;
+    g_adi_cfs.grade_m = grade_m;
+    g_adi_cfs.dt_half = dt_half;
+    g_adi_cfs.ep0 = ep0;
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        g_adi_cfs.do_lo[idim] = do_lo[idim];
+        g_adi_cfs.do_hi[idim] = do_hi[idim];
+        g_adi_cfs.sigma_max[idim] = 0._rt;
+        // Cell count along idim; used to reject nodal hi-wall indices that have
+        // no cell-centered CFS partner (demo ParallelCopy leaves those at fill).
+        g_adi_cfs.n_cells[idim] = static_cast<int>(
+            std::lround((probhi[idim] - problo[idim]) / dx[idim]));
+    }
 
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
         MultiFab& a_mf = *adi_pml_a[idim];
@@ -223,6 +266,7 @@ WarpX::UpdateAdiPmlRecursionCoeffs (Real a_dt)
         if (sigma_max < 0._rt && pml_len > 0._rt) {
             sigma_max = -(grade_m + 1._rt) * std::log(R) / (2._rt * eta0 * pml_len);
         }
+        g_adi_cfs.sigma_max[idim] = sigma_max;
 
         for (MFIter mfi(a_mf); mfi.isValid(); ++mfi) {
             auto const a_arr = a_mf.array(mfi);
@@ -264,5 +308,71 @@ WarpX::UpdateAdiPmlRecursionCoeffs (Real a_dt)
         adi_pml_b[idim]->FillBoundary(Geom(0).periodicity());
         adi_pml_a[idim]->setBndry(0._rt);
         adi_pml_b[idim]->setBndry(1._rt);
+    }
+}
+
+void
+FillAdiCfsOnLayout (MultiFab& dst, int dir, int quantity)
+{
+    // Collocate with the cell-centered CFS profiles at the same integer index
+    // (standalone demo: setVal(fill) then ParallelCopy from CC). Evaluating at
+    // the nodal coordinate instead puts full σ on the outer PEC wall and is
+    // violently unstable at large CFL.
+    Real const fill = (quantity == 1) ? 0._rt : 1._rt;
+    dst.setVal(fill);
+    if (!g_adi_cfs.on || dir < 0 || dir >= AMREX_SPACEDIM) {
+        return;
+    }
+
+    AdiCfsHost const p = g_adi_cfs;
+    int const idir = dir;
+    int const qty = quantity;
+    int const n_cells = p.n_cells[idir];
+
+    for (MFIter mfi(dst); mfi.isValid(); ++mfi) {
+        auto const arr = dst.array(mfi);
+        Box const bx = mfi.fabbox();
+        ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+        {
+            int const idx = (idir == 0) ? i : ((idir == 1) ? j : k);
+            if (idx < 0 || idx >= n_cells) {
+                return; // keep fill: no CC partner (e.g. nodal hi wall)
+            }
+            // Same sampling point as the CC profile arrays.
+            Real const coord = p.problo[idir]
+                + (static_cast<Real>(idx) + 0.5_rt) * p.dx[idir];
+            Real kappa = 1._rt;
+            Real aval = 0._rt;
+            Real bval = 1._rt;
+            int const lo_on = p.do_lo[idir];
+            int const hi_on = p.do_hi[idir];
+            if (lo_on || hi_on) {
+                Real const pml_len = static_cast<Real>(p.ncell) * p.dx[idir];
+                Real const inner_lo = p.problo[idir] + pml_len;
+                Real const inner_hi = p.probhi[idir] - pml_len;
+                Real const rho = adi_pml_rho(
+                    coord, inner_lo, inner_hi, lo_on, hi_on);
+                if (rho > 0._rt && pml_len > 0._rt) {
+                    Real frac = rho / pml_len;
+                    frac = amrex::max(0._rt, amrex::min(1._rt, frac));
+                    Real const poly = std::pow(frac, p.grade_m);
+                    kappa = 1._rt + (p.kappa_max - 1._rt) * poly;
+                    Real const sig = p.sigma_max[idir] * poly;
+                    Real const alp = p.alpha_max * (1._rt - frac);
+                    Real const expo = -((sig / kappa) + alp) * p.dt_half / p.ep0;
+                    bval = std::exp(expo);
+                    Real const denom = kappa * (sig + kappa * alp);
+                    aval = (std::abs(denom) > 0._rt)
+                        ? (sig / denom) * (bval - 1._rt) : 0._rt;
+                }
+            }
+            if (qty == 0) {
+                arr(i,j,k) = kappa;
+            } else if (qty == 1) {
+                arr(i,j,k) = aval;
+            } else {
+                arr(i,j,k) = bval;
+            }
+        });
     }
 }
