@@ -523,6 +523,12 @@ WarpX::InitFromScratch ()
 void
 WarpX::InitPML ()
 {
+    if (macroscopic_time_integrator_algo == MacroscopicTimeSteppingScheme::ADI)
+    {
+        InitAdiPML();
+        return;
+    }
+
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
         if (WarpX::field_boundary_lo[idim] == FieldBoundaryType::PML) {
             do_pml = 1;

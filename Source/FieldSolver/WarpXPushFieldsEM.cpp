@@ -1174,8 +1174,9 @@ WarpX::MacroscopicEvolveADI (int lev, PatchType patch_type, amrex::Real a_dt) {
         "Macroscopic ADI is not implemented for coarse patches."
     );
     WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
-        !(do_pml && pml[lev]->ok()),
-        "Macroscopic ADI currently supports periodic domains without PML."
+        !(do_pml && pml[lev] && pml[lev]->ok()),
+        "Macroscopic ADI does not use split-field pml[lev] boxes. "
+        "Set warpx.do_pml_in_domain = 1 for in-domain CFS-PML."
     );
 
 #ifdef WARPX_MAG_LLG
@@ -1186,8 +1187,10 @@ WarpX::MacroscopicEvolveADI (int lev, PatchType patch_type, amrex::Real a_dt) {
     {
         for (int normal = 0; normal < 3; ++normal)
         {
-            bool const lo_pec = field_boundary_lo[normal] == FieldBoundaryType::PEC;
-            bool const hi_pec = field_boundary_hi[normal] == FieldBoundaryType::PEC;
+            bool const lo_pec = field_boundary_lo[normal] == FieldBoundaryType::PEC
+                || field_boundary_lo[normal] == FieldBoundaryType::PML;
+            bool const hi_pec = field_boundary_hi[normal] == FieldBoundaryType::PEC
+                || field_boundary_hi[normal] == FieldBoundaryType::PML;
             if (!(lo_pec && hi_pec))
             {
                 for (int component = 0; component < 3; ++component)
@@ -1203,7 +1206,7 @@ WarpX::MacroscopicEvolveADI (int lev, PatchType patch_type, amrex::Real a_dt) {
                     WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
                         mask.min(lo_wall, 0) != 0._rt && mask.min(hi_wall, 0) != 0._rt,
                         "A PEC mask touches a domain wall. Macroscopic ADI requires both "
-                        "field boundaries normal to that wall to be PEC.");
+                        "field boundaries normal to that wall to be PEC or PML.");
                 }
             }
         }

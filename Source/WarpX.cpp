@@ -983,6 +983,11 @@ WarpX::ReadParameters ()
         pp_warpx.query("pml_has_particles", pml_has_particles);
         pp_warpx.query("do_pml_j_damping", do_pml_j_damping);
         pp_warpx.query("do_pml_in_domain", do_pml_in_domain);
+        utils::parser::queryWithParser(pp_warpx, "pml_kappa_max", adi_pml_kappa_max);
+        utils::parser::queryWithParser(pp_warpx, "pml_alpha_max", adi_pml_alpha_max);
+        utils::parser::queryWithParser(pp_warpx, "pml_R", adi_pml_R);
+        utils::parser::queryWithParser(pp_warpx, "pml_m", adi_pml_m);
+        utils::parser::queryWithParser(pp_warpx, "pml_sigma_max", adi_pml_sigma_max);
         pp_warpx.query("do_similar_dm_pml", do_similar_dm_pml);
         // Read `v_particle_pml` in units of the speed of light
         v_particle_pml = 1._rt;
@@ -2027,6 +2032,18 @@ WarpX::ClearLevel (int lev)
                 PEC_fp_adi[lev][solve_dir][i].reset();
             }
             m_pec_fp_adi_initialized[lev] = false;
+            if (lev == 0)
+            {
+                for (int idim = 0; idim < 3; ++idim) {
+                    adi_pml_stretch[idim].reset();
+                    adi_pml_a[idim].reset();
+                    adi_pml_b[idim].reset();
+                }
+                for (int ip = 0; ip < 6; ++ip) {
+                    adi_psi_e[ip].reset();
+                    adi_psi_h[ip].reset();
+                }
+            }
         }
 #ifdef WARPX_MAG_LLG
         Mfield_fp [lev][i].reset();

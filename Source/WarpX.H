@@ -638,6 +638,14 @@ public:
     amrex::MultiFab * get_pointer_H_biasfield_aux  (int lev, int direction) const { return H_biasfield_aux[lev][direction].get(); }
 #endif
     amrex::MultiFab * get_pointer_Efield_fp  (int lev, int direction) const { return Efield_fp[lev][direction].get(); }
+    int AdiPmlOn () const { return adi_pml; }
+    void FillAdiPmlProfiles ();
+    void UpdateAdiPmlRecursionCoeffs (amrex::Real dt);
+    amrex::MultiFab& get_adi_pml_stretch (int dir) { return *adi_pml_stretch[dir]; }
+    amrex::MultiFab& get_adi_pml_a (int dir) { return *adi_pml_a[dir]; }
+    amrex::MultiFab& get_adi_pml_b (int dir) { return *adi_pml_b[dir]; }
+    amrex::MultiFab& get_adi_psi_e (int idx) { return *adi_psi_e[idx]; }
+    amrex::MultiFab& get_adi_psi_h (int idx) { return *adi_psi_h[idx]; }
     amrex::MultiFab * get_pointer_PEC_fp  (int lev, int direction) const { return PEC_fp[lev][direction].get(); }
     amrex::MultiFab * get_pointer_Bfield_fp  (int lev, int direction) const { return Bfield_fp[lev][direction].get(); }
     amrex::MultiFab * get_pointer_Bfield_sc_fp  (int lev, int direction) const { return Bfield_sc_fp[lev][direction].get(); }
@@ -1486,6 +1494,7 @@ private:
     void PostRestart ();
 
     void InitPML ();
+    void InitAdiPML ();
     void ComputePMLFactors ();
 
     void InitFilter ();
@@ -1732,6 +1741,20 @@ private:
     int pml_has_particles = 0;
     int do_pml_j_damping = 0;
     int do_pml_in_domain = 0;
+    // Convolutional PML on the ADI domain (not split-field pml[lev]).
+    int adi_pml = 0;
+    amrex::IntVect adi_pml_Lo = amrex::IntVect::TheZeroVector();
+    amrex::IntVect adi_pml_Hi = amrex::IntVect::TheZeroVector();
+    amrex::Real adi_pml_kappa_max = 1.0;
+    amrex::Real adi_pml_alpha_max = 0.0;
+    amrex::Real adi_pml_R = 1.e-8;
+    amrex::Real adi_pml_m = 3.0;
+    amrex::Real adi_pml_sigma_max = -1.0;
+    std::array<std::unique_ptr<amrex::MultiFab>, 3> adi_pml_stretch;
+    std::array<std::unique_ptr<amrex::MultiFab>, 3> adi_pml_a;
+    std::array<std::unique_ptr<amrex::MultiFab>, 3> adi_pml_b;
+    std::array<std::unique_ptr<amrex::MultiFab>, 6> adi_psi_e;
+    std::array<std::unique_ptr<amrex::MultiFab>, 6> adi_psi_h;
     static int do_similar_dm_pml;
     bool do_pml_dive_cleaning; // default set in WarpX.cpp
     bool do_pml_divb_cleaning; // default set in WarpX.cpp

@@ -1,4 +1,5 @@
 #include "FiniteDifferenceSolver.H"
+#include "AdiPML.H"
 
 #include "MacroscopicProperties/MacroscopicProperties.H"
 #include "Utils/TextMsg.H"
@@ -12,6 +13,7 @@
 #include <AMReX_Array4.H>
 #include <AMReX_Box.H>
 #include <AMReX_Gpu.H>
+#include <AMReX_IntVect.H>
 #include <AMReX_MFIter.H>
 #include <AMReX_MultiFab.H>
 #include <AMReX_REAL.H>
@@ -136,7 +138,8 @@ namespace
         MultiFab& field, MultiFab const& rhs,
         MultiFab const& Cb, MultiFab const& Db,
         int dir, Real inv_d2,
-        MultiFab const* pec_mask)
+        MultiFab const* pec_mask,
+        MultiFab const* stretch = nullptr)
     {
         WARPX_ALWAYS_ASSERT_WITH_MESSAGE(field.ixType().nodeCentered(dir),
             "Macroscopic ADI periodic solve expects a nodal line along the implicit direction.");
@@ -161,6 +164,11 @@ namespace
             Array4<Real const> pec_arr;
             if (pec_mask) {
                 pec_arr = pec_mask->const_array(mfi);
+            }
+            Array4<Real const> k_arr;
+            bool const use_k = stretch != nullptr;
+            if (use_k) {
+                k_arr = stretch->const_array(mfi);
             }
             WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
                 bx.smallEnd(dir) == lo && bx.bigEnd(dir) == hi,
@@ -191,8 +199,14 @@ namespace
                 Real* c = bb + nsolve;
 
                 Real const db_seam = line_value(db_arr, dir, hi - 1, i, j, k);
-                Real const alpha = -db_seam * inv_d2;
-                Real const beta = -db_seam * inv_d2;
+                Real seam_scale = 1._rt;
+                if (use_k) {
+                    Real const k0 = line_value(k_arr, dir, lo, i, j, k);
+                    Real const knm1 = line_value(k_arr, dir, hi - 1, i, j, k);
+                    seam_scale = 1._rt / (k0 * knm1);
+                }
+                Real const alpha = -db_seam * seam_scale * inv_d2;
+                Real const beta = -db_seam * seam_scale * inv_d2;
 
                 // Physical coefficients first (needed for Sherman-Morrison corners).
                 for (int p = 0; p < nsolve; ++p) {
@@ -200,8 +214,18 @@ namespace
                     Real const db_lo = (p == 0) ? db_seam
                                                 : line_value(db_arr, dir, s - 1, i, j, k);
                     Real const db_hi = line_value(db_arr, dir, s, i, j, k);
-                    Real const al = db_lo * inv_d2;
-                    Real const ga = db_hi * inv_d2;
+                    Real k_center = 1._rt;
+                    Real k_lo = 1._rt;
+                    Real k_hi = 1._rt;
+                    if (use_k) {
+                        k_center = line_value(k_arr, dir, s, i, j, k);
+                        k_lo = (p == 0)
+                            ? line_value(k_arr, dir, hi - 1, i, j, k)
+                            : line_value(k_arr, dir, s - 1, i, j, k);
+                        k_hi = line_value(k_arr, dir, s, i, j, k);
+                    }
+                    Real const al = db_lo * inv_d2 / (k_center * k_lo);
+                    Real const ga = db_hi * inv_d2 / (k_center * k_hi);
                     bb[p] = 1._rt / line_value(cb_arr, dir, s, i, j, k) + al + ga;
                     a[p] = (p == 0) ? 0._rt : -al;
                     c[p] = (p == nsolve - 1) ? 0._rt : -ga;
@@ -247,7 +271,8 @@ namespace
         MultiFab& field, MultiFab const& rhs,
         MultiFab const& Cb, MultiFab const& Db,
         int dir, Real inv_d2,
-        MultiFab const* pec_mask)
+        MultiFab const* pec_mask,
+        MultiFab const* stretch = nullptr)
     {
         WARPX_ALWAYS_ASSERT_WITH_MESSAGE(field.ixType().nodeCentered(dir),
             "Macroscopic ADI PEC solve expects a nodal line along the implicit direction.");
@@ -272,6 +297,11 @@ namespace
             Array4<Real const> pec_arr;
             if (pec_mask != nullptr) {
                 pec_arr = pec_mask->const_array(mfi);
+            }
+            Array4<Real const> k_arr;
+            bool const use_k = stretch != nullptr;
+            if (use_k) {
+                k_arr = stretch->const_array(mfi);
             }
             WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
                 bx.smallEnd(dir) == lo && bx.bigEnd(dir) == hi,
@@ -304,8 +334,16 @@ namespace
                     int const s = lo + 1 + p;
                     Real const db_lo = line_value(db_arr, dir, s - 1, i, j, k);
                     Real const db_hi = line_value(db_arr, dir, s, i, j, k);
-                    Real const al = db_lo * inv_d2;
-                    Real const ga = db_hi * inv_d2;
+                    Real k_center = 1._rt;
+                    Real k_lo = 1._rt;
+                    Real k_hi = 1._rt;
+                    if (use_k) {
+                        k_center = line_value(k_arr, dir, s, i, j, k);
+                        k_lo = line_value(k_arr, dir, s - 1, i, j, k);
+                        k_hi = line_value(k_arr, dir, s, i, j, k);
+                    }
+                    Real const al = db_lo * inv_d2 / (k_center * k_lo);
+                    Real const ga = db_hi * inv_d2 / (k_center * k_hi);
                     b[p] = 1._rt / line_value(cb_arr, dir, s, i, j, k) + al + ga;
                     a[p] = (p == 0) ? 0._rt : -al;
                     c[p] = (p == nsolve - 1) ? 0._rt : -ga;
@@ -346,23 +384,32 @@ namespace
         for (int dir = 0; dir < 3; ++dir) {
             bool const lo_pec = WarpX::field_boundary_lo[dir] == FieldBoundaryType::PEC;
             bool const hi_pec = WarpX::field_boundary_hi[dir] == FieldBoundaryType::PEC;
-            if (lo_pec || hi_pec) {
+            bool const lo_pml = WarpX::field_boundary_lo[dir] == FieldBoundaryType::PML;
+            bool const hi_pml = WarpX::field_boundary_hi[dir] == FieldBoundaryType::PML;
+            bool const lo_dirichlet = lo_pec || lo_pml;
+            bool const hi_dirichlet = hi_pec || hi_pml;
+            if (lo_dirichlet || hi_dirichlet) {
                 WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
-                    lo_pec && hi_pec,
-                    "Macroscopic ADI currently supports PEC only on both domain walls "
+                    lo_dirichlet && hi_dirichlet,
+                    "Macroscopic ADI currently supports PEC/PML only on both domain walls "
                     "normal to one direction.");
                 WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
                     !periodicity.isPeriodic(dir),
-                    "Macroscopic ADI PEC direction must be non-periodic.");
+                    "Macroscopic ADI PEC/PML direction must be non-periodic.");
                 pec.normal[dir] = true;
             } else {
                 WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
                     periodicity.isPeriodic(dir),
                     "Macroscopic ADI currently supports periodic boundaries, with optional "
-                    "PEC domain walls normal to non-periodic directions.");
+                    "PEC or in-domain PML walls normal to non-periodic directions.");
             }
         }
         return pec;
+    }
+
+    bool adi_pml_on ()
+    {
+        return WarpX::GetInstance().AdiPmlOn() != 0;
     }
 
     bool use_pec_dirichlet_solve (int e_comp, int solve_dir, PecConfig const& pec)
@@ -374,12 +421,15 @@ namespace
                                    MultiFab const& Cb, MultiFab const& Db,
                                    int e_comp, int solve_dir, Real inv_d2,
                                    PecConfig const& pec,
-                                   MultiFab const* pec_mask)
+                                   MultiFab const* pec_mask,
+                                   MultiFab const* stretch = nullptr)
     {
         if (use_pec_dirichlet_solve(e_comp, solve_dir, pec)) {
-            solve_dirichlet_nodal_lines(field, rhs, Cb, Db, solve_dir, inv_d2, pec_mask);
+            solve_dirichlet_nodal_lines(field, rhs, Cb, Db, solve_dir, inv_d2,
+                                        pec_mask, stretch);
         } else {
-            solve_periodic_lines(field, rhs, Cb, Db, solve_dir, inv_d2, pec_mask);
+            solve_periodic_lines(field, rhs, Cb, Db, solve_dir, inv_d2,
+                                 pec_mask, stretch);
         }
     }
 
@@ -450,6 +500,28 @@ namespace
         MultiFab& dst, MultiFab const& src, Periodicity const& periodicity)
     {
         dst.ParallelCopy(src, 0, 0, 1, IntVect(0), dst.nGrowVect(), periodicity);
+    }
+
+    // Cell-centered CFS profiles (kappa, a, b) onto a possibly staggered layout,
+    // sampling the same integer index as the standalone ADI+PML demo.
+    void copy_cc_profile_to_layout (
+        MultiFab& dst, MultiFab const& src, Periodicity const& periodicity)
+    {
+        if (dst.ixType() == src.ixType()) {
+            copy_coeff_to_layout(dst, src, periodicity);
+            return;
+        }
+        MultiFab tmp = make_coeff_like(dst, src);
+        copy_coeff_to_layout(tmp, src, periodicity);
+        for (MFIter mfi(dst); mfi.isValid(); ++mfi) {
+            auto const darr = dst.array(mfi);
+            auto const sarr = tmp.const_array(mfi);
+            Box const bx = mfi.fabbox();
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                darr(i,j,k) = sarr(i,j,k);
+            });
+        }
     }
 
     void add_soft_e_source_to_rhs (
@@ -720,6 +792,7 @@ namespace
         copy_coeff_to_layout(p_field, *mat.p[0], periodicity);
         copy_coeff_to_layout(cb_field, *mat.Cb[0], periodicity);
         copy_coeff_to_layout(db_field, *mat.Db[2], periodicity);
+        if (!adi_pml_on()) {
         for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
             auto const rhs_arr = rhs.array(mfi);
             auto const ex_arr = ex.const_array(mfi);
@@ -743,6 +816,64 @@ namespace
                     - r * c.inv_dx * c.inv_dy * ey_hi;
             });
         }
+        } else {
+            WarpX& warpx = WarpX::GetInstance();
+            MultiFab ky_field = make_rhs(ex);
+            MultiFab kz_field = make_rhs(ex);
+            MultiFab kx_db = make_coeff_like(ex, *mat.Db[2]);
+            MultiFab psi_e0 = make_rhs(ex);
+            MultiFab psi_e1 = make_rhs(ex);
+            MultiFab psi_h0 = make_coeff_like(ex, *mat.Db[2]);
+            MultiFab psi_h1 = make_coeff_like(ex, *mat.Db[2]);
+            copy_cc_profile_to_layout(ky_field, warpx.get_adi_pml_stretch(1), periodicity);
+            copy_cc_profile_to_layout(kz_field, warpx.get_adi_pml_stretch(2), periodicity);
+            copy_cc_profile_to_layout(kx_db, warpx.get_adi_pml_stretch(0), periodicity);
+            copy_coeff_to_layout(psi_e0, warpx.get_adi_psi_e(AdiPsiE::EXY), periodicity);
+            copy_coeff_to_layout(psi_e1, warpx.get_adi_psi_e(AdiPsiE::EXZ), periodicity);
+            copy_coeff_to_layout(psi_h0, warpx.get_adi_psi_h(AdiPsiH::HZY), periodicity);
+            copy_coeff_to_layout(psi_h1, warpx.get_adi_psi_h(AdiPsiH::HZX), periodicity);
+            for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
+                auto const rhs_arr = rhs.array(mfi);
+                auto const ex_arr = ex.const_array(mfi);
+                auto const ey_arr = ey.const_array(mfi);
+                auto const hy_arr = hy.const_array(mfi);
+                auto const hz_arr = hz.const_array(mfi);
+                auto const p_arr = p_field.const_array(mfi);
+                auto const db_arr = db_field.const_array(mfi);
+                auto const ky_arr = ky_field.const_array(mfi);
+                auto const kz_arr = kz_field.const_array(mfi);
+                auto const kx_arr = kx_db.const_array(mfi);
+                auto const pe0 = psi_e0.const_array(mfi);
+                auto const pe1 = psi_e1.const_array(mfi);
+                auto const ph0 = psi_h0.const_array(mfi);
+                auto const ph1 = psi_h1.const_array(mfi);
+                Box const& bx = mfi.validbox();
+                ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+                {
+                    Real const q = db_arr(i, j-1, k);
+                    Real const r = db_arr(i, j, k);
+                    Real const ky = ky_arr(i,j,k);
+                    Real const kz = kz_arr(i,j,k);
+                    Real const curl_h =
+                        (c.inv_dy / ky) * (hz_arr(i,j,k) - hz_arr(i,j-1,k)) -
+                        (c.inv_dz / kz) * (hy_arr(i,j,k) - hy_arr(i,j,k-1));
+                    Real const ey_lo = ey_arr(i+1,j-1,k) - ey_arr(i,j-1,k);
+                    Real const ey_hi = ey_arr(i+1,j,k) - ey_arr(i,j,k);
+                    Real const kx_lo = kx_arr(i, j-1, k);
+                    Real const kx_hi = kx_arr(i, j, k);
+                    Real const psi_h_hi = ph0(i,j,k) - ph1(i,j,k);
+                    Real const psi_h_lo = ph0(i,j-1,k) - ph1(i,j-1,k);
+                    Real const psi_h_term =
+                        -(r * c.inv_dy / ky) * psi_h_hi +
+                         (q * c.inv_dy / ky) * psi_h_lo;
+                    Real const psi_e_term = pe1(i,j,k) - pe0(i,j,k);
+                    rhs_arr(i,j,k) = p_arr(i,j,k) * ex_arr(i,j,k) + curl_h
+                        + q * c.inv_dx * c.inv_dy * ey_lo / (ky * kx_lo)
+                        - r * c.inv_dx * c.inv_dy * ey_hi / (ky * kx_hi)
+                        + psi_h_term + psi_e_term;
+                });
+            }
+        }
         add_lumped_inductor_current_to_rhs(
             rhs, *mat.kappa[0], 0, periodicity);
         add_soft_e_source_to_rhs(rhs, cb_field, 0, 1);
@@ -763,6 +894,7 @@ namespace
         copy_coeff_to_layout(p_field, *mat.p[1], periodicity);
         copy_coeff_to_layout(cb_field, *mat.Cb[1], periodicity);
         copy_coeff_to_layout(db_field, *mat.Db[0], periodicity);
+        if (!adi_pml_on()) {
         for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
             auto const rhs_arr = rhs.array(mfi);
             auto const ey_arr = ey.const_array(mfi);
@@ -786,6 +918,64 @@ namespace
                     - r * c.inv_dy * c.inv_dz * ez_hi;
             });
         }
+        } else {
+            WarpX& warpx = WarpX::GetInstance();
+            MultiFab kz_field = make_rhs(ey);
+            MultiFab kx_field = make_rhs(ey);
+            MultiFab ky_db = make_coeff_like(ey, *mat.Db[0]);
+            MultiFab psi_e0 = make_rhs(ey);
+            MultiFab psi_e1 = make_rhs(ey);
+            MultiFab psi_h0 = make_coeff_like(ey, *mat.Db[0]);
+            MultiFab psi_h1 = make_coeff_like(ey, *mat.Db[0]);
+            copy_cc_profile_to_layout(kz_field, warpx.get_adi_pml_stretch(2), periodicity);
+            copy_cc_profile_to_layout(kx_field, warpx.get_adi_pml_stretch(0), periodicity);
+            copy_cc_profile_to_layout(ky_db, warpx.get_adi_pml_stretch(1), periodicity);
+            copy_coeff_to_layout(psi_e0, warpx.get_adi_psi_e(AdiPsiE::EYZ), periodicity);
+            copy_coeff_to_layout(psi_e1, warpx.get_adi_psi_e(AdiPsiE::EYX), periodicity);
+            copy_coeff_to_layout(psi_h0, warpx.get_adi_psi_h(AdiPsiH::HXZ), periodicity);
+            copy_coeff_to_layout(psi_h1, warpx.get_adi_psi_h(AdiPsiH::HXY), periodicity);
+            for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
+                auto const rhs_arr = rhs.array(mfi);
+                auto const ey_arr = ey.const_array(mfi);
+                auto const ez_arr = ez.const_array(mfi);
+                auto const hx_arr = hx.const_array(mfi);
+                auto const hz_arr = hz.const_array(mfi);
+                auto const p_arr = p_field.const_array(mfi);
+                auto const db_arr = db_field.const_array(mfi);
+                auto const kz_arr = kz_field.const_array(mfi);
+                auto const kx_arr = kx_field.const_array(mfi);
+                auto const ky_arr = ky_db.const_array(mfi);
+                auto const pe0 = psi_e0.const_array(mfi);
+                auto const pe1 = psi_e1.const_array(mfi);
+                auto const ph0 = psi_h0.const_array(mfi);
+                auto const ph1 = psi_h1.const_array(mfi);
+                Box const& b = mfi.validbox();
+                ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+                {
+                    Real const q = db_arr(i, j, k-1);
+                    Real const r = db_arr(i, j, k);
+                    Real const kz = kz_arr(i,j,k);
+                    Real const kx = kx_arr(i,j,k);
+                    Real const curl_h =
+                        (c.inv_dz / kz) * (hx_arr(i,j,k) - hx_arr(i,j,k-1)) -
+                        (c.inv_dx / kx) * (hz_arr(i,j,k) - hz_arr(i-1,j,k));
+                    Real const ez_lo = ez_arr(i,j+1,k-1) - ez_arr(i,j,k-1);
+                    Real const ez_hi = ez_arr(i,j+1,k) - ez_arr(i,j,k);
+                    Real const ky_lo = ky_arr(i, j, k-1);
+                    Real const ky_hi = ky_arr(i, j, k);
+                    Real const psi_h_hi = ph0(i,j,k) - ph1(i,j,k);
+                    Real const psi_h_lo = ph0(i,j,k-1) - ph1(i,j,k-1);
+                    Real const psi_h_term =
+                        -(r * c.inv_dz / kz) * psi_h_hi +
+                         (q * c.inv_dz / kz) * psi_h_lo;
+                    Real const psi_e_term = pe1(i,j,k) - pe0(i,j,k);
+                    rhs_arr(i,j,k) = p_arr(i,j,k) * ey_arr(i,j,k) + curl_h
+                        + q * c.inv_dy * c.inv_dz * ez_lo / (kz * ky_lo)
+                        - r * c.inv_dy * c.inv_dz * ez_hi / (kz * ky_hi)
+                        + psi_h_term + psi_e_term;
+                });
+            }
+        }
         add_lumped_inductor_current_to_rhs(
             rhs, *mat.kappa[1], 1, periodicity);
         add_soft_e_source_to_rhs(rhs, cb_field, 1, 1);
@@ -806,6 +996,7 @@ namespace
         copy_coeff_to_layout(p_field, *mat.p[2], periodicity);
         copy_coeff_to_layout(cb_field, *mat.Cb[2], periodicity);
         copy_coeff_to_layout(db_field, *mat.Db[1], periodicity);
+        if (!adi_pml_on()) {
         for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
             auto const rhs_arr = rhs.array(mfi);
             auto const ez_arr = ez.const_array(mfi);
@@ -829,6 +1020,64 @@ namespace
                     - r * c.inv_dz * c.inv_dx * ex_hi;
             });
         }
+        } else {
+            WarpX& warpx = WarpX::GetInstance();
+            MultiFab kx_field = make_rhs(ez);
+            MultiFab ky_field = make_rhs(ez);
+            MultiFab kz_db = make_coeff_like(ez, *mat.Db[1]);
+            MultiFab psi_e0 = make_rhs(ez);
+            MultiFab psi_e1 = make_rhs(ez);
+            MultiFab psi_h0 = make_coeff_like(ez, *mat.Db[1]);
+            MultiFab psi_h1 = make_coeff_like(ez, *mat.Db[1]);
+            copy_cc_profile_to_layout(kx_field, warpx.get_adi_pml_stretch(0), periodicity);
+            copy_cc_profile_to_layout(ky_field, warpx.get_adi_pml_stretch(1), periodicity);
+            copy_cc_profile_to_layout(kz_db, warpx.get_adi_pml_stretch(2), periodicity);
+            copy_coeff_to_layout(psi_e0, warpx.get_adi_psi_e(AdiPsiE::EZX), periodicity);
+            copy_coeff_to_layout(psi_e1, warpx.get_adi_psi_e(AdiPsiE::EZY), periodicity);
+            copy_coeff_to_layout(psi_h0, warpx.get_adi_psi_h(AdiPsiH::HYX), periodicity);
+            copy_coeff_to_layout(psi_h1, warpx.get_adi_psi_h(AdiPsiH::HYZ), periodicity);
+            for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
+                auto const rhs_arr = rhs.array(mfi);
+                auto const ez_arr = ez.const_array(mfi);
+                auto const ex_arr = ex.const_array(mfi);
+                auto const hx_arr = hx.const_array(mfi);
+                auto const hy_arr = hy.const_array(mfi);
+                auto const p_arr = p_field.const_array(mfi);
+                auto const db_arr = db_field.const_array(mfi);
+                auto const kx_arr = kx_field.const_array(mfi);
+                auto const ky_arr = ky_field.const_array(mfi);
+                auto const kz_arr = kz_db.const_array(mfi);
+                auto const pe0 = psi_e0.const_array(mfi);
+                auto const pe1 = psi_e1.const_array(mfi);
+                auto const ph0 = psi_h0.const_array(mfi);
+                auto const ph1 = psi_h1.const_array(mfi);
+                Box const& b = mfi.validbox();
+                ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+                {
+                    Real const q = db_arr(i-1, j, k);
+                    Real const r = db_arr(i, j, k);
+                    Real const kx = kx_arr(i,j,k);
+                    Real const ky = ky_arr(i,j,k);
+                    Real const curl_h =
+                        (c.inv_dx / kx) * (hy_arr(i,j,k) - hy_arr(i-1,j,k)) -
+                        (c.inv_dy / ky) * (hx_arr(i,j,k) - hx_arr(i,j-1,k));
+                    Real const ex_lo = ex_arr(i-1,j,k+1) - ex_arr(i-1,j,k);
+                    Real const ex_hi = ex_arr(i,j,k+1) - ex_arr(i,j,k);
+                    Real const kz_lo = kz_arr(i-1, j, k);
+                    Real const kz_hi = kz_arr(i, j, k);
+                    Real const psi_h_hi = ph0(i,j,k) - ph1(i,j,k);
+                    Real const psi_h_lo = ph0(i-1,j,k) - ph1(i-1,j,k);
+                    Real const psi_h_term =
+                        -(r * c.inv_dx / kx) * psi_h_hi +
+                         (q * c.inv_dx / kx) * psi_h_lo;
+                    Real const psi_e_term = pe1(i,j,k) - pe0(i,j,k);
+                    rhs_arr(i,j,k) = p_arr(i,j,k) * ez_arr(i,j,k) + curl_h
+                        + q * c.inv_dz * c.inv_dx * ex_lo / (kx * kz_lo)
+                        - r * c.inv_dz * c.inv_dx * ex_hi / (kx * kz_hi)
+                        + psi_h_term + psi_e_term;
+                });
+            }
+        }
         add_lumped_inductor_current_to_rhs(
             rhs, *mat.kappa[2], 2, periodicity);
         add_soft_e_source_to_rhs(rhs, cb_field, 2, 1);
@@ -849,6 +1098,7 @@ namespace
         copy_coeff_to_layout(p_field, *mat.p[0], periodicity);
         copy_coeff_to_layout(cb_field, *mat.Cb[0], periodicity);
         copy_coeff_to_layout(db_field, *mat.Db[1], periodicity);
+        if (!adi_pml_on()) {
         for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
             auto const rhs_arr = rhs.array(mfi);
             auto const ex_arr = ex.const_array(mfi);
@@ -872,6 +1122,64 @@ namespace
                     - r * c.inv_dx * c.inv_dz * ez_hi;
             });
         }
+        } else {
+            WarpX& warpx = WarpX::GetInstance();
+            MultiFab ky_field = make_rhs(ex);
+            MultiFab kz_field = make_rhs(ex);
+            MultiFab kx_db = make_coeff_like(ex, *mat.Db[1]);
+            MultiFab psi_e0 = make_rhs(ex);
+            MultiFab psi_e1 = make_rhs(ex);
+            MultiFab psi_h0 = make_coeff_like(ex, *mat.Db[1]);
+            MultiFab psi_h1 = make_coeff_like(ex, *mat.Db[1]);
+            copy_cc_profile_to_layout(ky_field, warpx.get_adi_pml_stretch(1), periodicity);
+            copy_cc_profile_to_layout(kz_field, warpx.get_adi_pml_stretch(2), periodicity);
+            copy_cc_profile_to_layout(kx_db, warpx.get_adi_pml_stretch(0), periodicity);
+            copy_coeff_to_layout(psi_e0, warpx.get_adi_psi_e(AdiPsiE::EXY), periodicity);
+            copy_coeff_to_layout(psi_e1, warpx.get_adi_psi_e(AdiPsiE::EXZ), periodicity);
+            copy_coeff_to_layout(psi_h0, warpx.get_adi_psi_h(AdiPsiH::HYX), periodicity);
+            copy_coeff_to_layout(psi_h1, warpx.get_adi_psi_h(AdiPsiH::HYZ), periodicity);
+            for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
+                auto const rhs_arr = rhs.array(mfi);
+                auto const ex_arr = ex.const_array(mfi);
+                auto const ez_arr = ez.const_array(mfi);
+                auto const hy_arr = hy.const_array(mfi);
+                auto const hz_arr = hz.const_array(mfi);
+                auto const p_arr = p_field.const_array(mfi);
+                auto const db_arr = db_field.const_array(mfi);
+                auto const ky_arr = ky_field.const_array(mfi);
+                auto const kz_arr = kz_field.const_array(mfi);
+                auto const kx_arr = kx_db.const_array(mfi);
+                auto const pe0 = psi_e0.const_array(mfi);
+                auto const pe1 = psi_e1.const_array(mfi);
+                auto const ph0 = psi_h0.const_array(mfi);
+                auto const ph1 = psi_h1.const_array(mfi);
+                Box const& b = mfi.validbox();
+                ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+                {
+                    Real const q = db_arr(i, j, k-1);
+                    Real const r = db_arr(i, j, k);
+                    Real const ky = ky_arr(i,j,k);
+                    Real const kz = kz_arr(i,j,k);
+                    Real const curl_h =
+                        (c.inv_dy / ky) * (hz_arr(i,j,k) - hz_arr(i,j-1,k)) -
+                        (c.inv_dz / kz) * (hy_arr(i,j,k) - hy_arr(i,j,k-1));
+                    Real const ez_lo = ez_arr(i+1,j,k-1) - ez_arr(i,j,k-1);
+                    Real const ez_hi = ez_arr(i+1,j,k) - ez_arr(i,j,k);
+                    Real const kx_lo = kx_arr(i, j, k-1);
+                    Real const kx_hi = kx_arr(i, j, k);
+                    Real const psi_h_hi = ph0(i,j,k) - ph1(i,j,k);
+                    Real const psi_h_lo = ph0(i,j,k-1) - ph1(i,j,k-1);
+                    Real const psi_h_term =
+                        -(r * c.inv_dz / kz) * psi_h_hi +
+                         (q * c.inv_dz / kz) * psi_h_lo;
+                    Real const psi_e_term = pe1(i,j,k) - pe0(i,j,k);
+                    rhs_arr(i,j,k) = p_arr(i,j,k) * ex_arr(i,j,k) + curl_h
+                        + q * c.inv_dx * c.inv_dz * ez_lo / (kz * kx_lo)
+                        - r * c.inv_dx * c.inv_dz * ez_hi / (kz * kx_hi)
+                        + psi_h_term + psi_e_term;
+                });
+            }
+        }
         add_lumped_inductor_current_to_rhs(
             rhs, *mat.kappa[0], 0, periodicity);
         add_soft_e_source_to_rhs(rhs, cb_field, 0, 2);
@@ -892,6 +1200,7 @@ namespace
         copy_coeff_to_layout(p_field, *mat.p[1], periodicity);
         copy_coeff_to_layout(cb_field, *mat.Cb[1], periodicity);
         copy_coeff_to_layout(db_field, *mat.Db[2], periodicity);
+        if (!adi_pml_on()) {
         for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
             auto const rhs_arr = rhs.array(mfi);
             auto const ey_arr = ey.const_array(mfi);
@@ -915,6 +1224,64 @@ namespace
                     - r * c.inv_dy * c.inv_dx * ex_hi;
             });
         }
+        } else {
+            WarpX& warpx = WarpX::GetInstance();
+            MultiFab kz_field = make_rhs(ey);
+            MultiFab kx_field = make_rhs(ey);
+            MultiFab ky_db = make_coeff_like(ey, *mat.Db[2]);
+            MultiFab psi_e0 = make_rhs(ey);
+            MultiFab psi_e1 = make_rhs(ey);
+            MultiFab psi_h0 = make_coeff_like(ey, *mat.Db[2]);
+            MultiFab psi_h1 = make_coeff_like(ey, *mat.Db[2]);
+            copy_cc_profile_to_layout(kz_field, warpx.get_adi_pml_stretch(2), periodicity);
+            copy_cc_profile_to_layout(kx_field, warpx.get_adi_pml_stretch(0), periodicity);
+            copy_cc_profile_to_layout(ky_db, warpx.get_adi_pml_stretch(1), periodicity);
+            copy_coeff_to_layout(psi_e0, warpx.get_adi_psi_e(AdiPsiE::EYZ), periodicity);
+            copy_coeff_to_layout(psi_e1, warpx.get_adi_psi_e(AdiPsiE::EYX), periodicity);
+            copy_coeff_to_layout(psi_h0, warpx.get_adi_psi_h(AdiPsiH::HZY), periodicity);
+            copy_coeff_to_layout(psi_h1, warpx.get_adi_psi_h(AdiPsiH::HZX), periodicity);
+            for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
+                auto const rhs_arr = rhs.array(mfi);
+                auto const ey_arr = ey.const_array(mfi);
+                auto const ex_arr = ex.const_array(mfi);
+                auto const hx_arr = hx.const_array(mfi);
+                auto const hz_arr = hz.const_array(mfi);
+                auto const p_arr = p_field.const_array(mfi);
+                auto const db_arr = db_field.const_array(mfi);
+                auto const kz_arr = kz_field.const_array(mfi);
+                auto const kx_arr = kx_field.const_array(mfi);
+                auto const ky_arr = ky_db.const_array(mfi);
+                auto const pe0 = psi_e0.const_array(mfi);
+                auto const pe1 = psi_e1.const_array(mfi);
+                auto const ph0 = psi_h0.const_array(mfi);
+                auto const ph1 = psi_h1.const_array(mfi);
+                Box const& b = mfi.validbox();
+                ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+                {
+                    Real const q = db_arr(i-1, j, k);
+                    Real const r = db_arr(i, j, k);
+                    Real const kz = kz_arr(i,j,k);
+                    Real const kx = kx_arr(i,j,k);
+                    Real const curl_h =
+                        (c.inv_dz / kz) * (hx_arr(i,j,k) - hx_arr(i,j,k-1)) -
+                        (c.inv_dx / kx) * (hz_arr(i,j,k) - hz_arr(i-1,j,k));
+                    Real const ex_lo = ex_arr(i-1,j+1,k) - ex_arr(i-1,j,k);
+                    Real const ex_hi = ex_arr(i,j+1,k) - ex_arr(i,j,k);
+                    Real const ky_lo = ky_arr(i-1, j, k);
+                    Real const ky_hi = ky_arr(i, j, k);
+                    Real const psi_h_hi = ph0(i,j,k) - ph1(i,j,k);
+                    Real const psi_h_lo = ph0(i-1,j,k) - ph1(i-1,j,k);
+                    Real const psi_h_term =
+                        -(r * c.inv_dx / kx) * psi_h_hi +
+                         (q * c.inv_dx / kx) * psi_h_lo;
+                    Real const psi_e_term = pe1(i,j,k) - pe0(i,j,k);
+                    rhs_arr(i,j,k) = p_arr(i,j,k) * ey_arr(i,j,k) + curl_h
+                        + q * c.inv_dy * c.inv_dx * ex_lo / (kx * ky_lo)
+                        - r * c.inv_dy * c.inv_dx * ex_hi / (kx * ky_hi)
+                        + psi_h_term + psi_e_term;
+                });
+            }
+        }
         add_lumped_inductor_current_to_rhs(
             rhs, *mat.kappa[1], 1, periodicity);
         add_soft_e_source_to_rhs(rhs, cb_field, 1, 2);
@@ -935,6 +1302,7 @@ namespace
         copy_coeff_to_layout(p_field, *mat.p[2], periodicity);
         copy_coeff_to_layout(cb_field, *mat.Cb[2], periodicity);
         copy_coeff_to_layout(db_field, *mat.Db[0], periodicity);
+        if (!adi_pml_on()) {
         for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
             auto const rhs_arr = rhs.array(mfi);
             auto const ez_arr = ez.const_array(mfi);
@@ -958,6 +1326,64 @@ namespace
                     - r * c.inv_dz * c.inv_dy * ey_hi;
             });
         }
+        } else {
+            WarpX& warpx = WarpX::GetInstance();
+            MultiFab kx_field = make_rhs(ez);
+            MultiFab ky_field = make_rhs(ez);
+            MultiFab kz_db = make_coeff_like(ez, *mat.Db[0]);
+            MultiFab psi_e0 = make_rhs(ez);
+            MultiFab psi_e1 = make_rhs(ez);
+            MultiFab psi_h0 = make_coeff_like(ez, *mat.Db[0]);
+            MultiFab psi_h1 = make_coeff_like(ez, *mat.Db[0]);
+            copy_cc_profile_to_layout(kx_field, warpx.get_adi_pml_stretch(0), periodicity);
+            copy_cc_profile_to_layout(ky_field, warpx.get_adi_pml_stretch(1), periodicity);
+            copy_cc_profile_to_layout(kz_db, warpx.get_adi_pml_stretch(2), periodicity);
+            copy_coeff_to_layout(psi_e0, warpx.get_adi_psi_e(AdiPsiE::EZX), periodicity);
+            copy_coeff_to_layout(psi_e1, warpx.get_adi_psi_e(AdiPsiE::EZY), periodicity);
+            copy_coeff_to_layout(psi_h0, warpx.get_adi_psi_h(AdiPsiH::HXZ), periodicity);
+            copy_coeff_to_layout(psi_h1, warpx.get_adi_psi_h(AdiPsiH::HXY), periodicity);
+            for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
+                auto const rhs_arr = rhs.array(mfi);
+                auto const ez_arr = ez.const_array(mfi);
+                auto const ey_arr = ey.const_array(mfi);
+                auto const hx_arr = hx.const_array(mfi);
+                auto const hy_arr = hy.const_array(mfi);
+                auto const p_arr = p_field.const_array(mfi);
+                auto const db_arr = db_field.const_array(mfi);
+                auto const kx_arr = kx_field.const_array(mfi);
+                auto const ky_arr = ky_field.const_array(mfi);
+                auto const kz_arr = kz_db.const_array(mfi);
+                auto const pe0 = psi_e0.const_array(mfi);
+                auto const pe1 = psi_e1.const_array(mfi);
+                auto const ph0 = psi_h0.const_array(mfi);
+                auto const ph1 = psi_h1.const_array(mfi);
+                Box const& b = mfi.validbox();
+                ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+                {
+                    Real const q = db_arr(i, j-1, k);
+                    Real const r = db_arr(i, j, k);
+                    Real const kx = kx_arr(i,j,k);
+                    Real const ky = ky_arr(i,j,k);
+                    Real const curl_h =
+                        (c.inv_dx / kx) * (hy_arr(i,j,k) - hy_arr(i-1,j,k)) -
+                        (c.inv_dy / ky) * (hx_arr(i,j,k) - hx_arr(i,j-1,k));
+                    Real const ey_lo = ey_arr(i,j-1,k+1) - ey_arr(i,j-1,k);
+                    Real const ey_hi = ey_arr(i,j,k+1) - ey_arr(i,j,k);
+                    Real const kz_lo = kz_arr(i, j-1, k);
+                    Real const kz_hi = kz_arr(i, j, k);
+                    Real const psi_h_hi = ph0(i,j,k) - ph1(i,j,k);
+                    Real const psi_h_lo = ph0(i,j-1,k) - ph1(i,j-1,k);
+                    Real const psi_h_term =
+                        -(r * c.inv_dy / ky) * psi_h_hi +
+                         (q * c.inv_dy / ky) * psi_h_lo;
+                    Real const psi_e_term = pe1(i,j,k) - pe0(i,j,k);
+                    rhs_arr(i,j,k) = p_arr(i,j,k) * ez_arr(i,j,k) + curl_h
+                        + q * c.inv_dz * c.inv_dy * ey_lo / (ky * kz_lo)
+                        - r * c.inv_dz * c.inv_dy * ey_hi / (ky * kz_hi)
+                        + psi_h_term + psi_e_term;
+                });
+            }
+        }
         add_lumped_inductor_current_to_rhs(
             rhs, *mat.kappa[2], 2, periodicity);
         add_soft_e_source_to_rhs(rhs, cb_field, 2, 2);
@@ -974,8 +1400,15 @@ namespace
         copy_coeff_to_layout(Cb, *mat.Cb[0], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[2], periodicity);
         MultiFab const* pec_mask = pec_masks[1][0].get();
+        MultiFab stretch_mf;
+        MultiFab const* stretch = nullptr;
+        if (adi_pml_on()) {
+            stretch_mf = make_rhs(ex);
+            copy_cc_profile_to_layout(stretch_mf, WarpX::GetInstance().get_adi_pml_stretch(1), periodicity);
+            stretch = &stretch_mf;
+        }
         solve_implicit_component(ex, rhs, Cb, Db,
-                                 0, 1, c.inv_dy * c.inv_dy, pec, pec_mask);
+                                 0, 1, c.inv_dy * c.inv_dy, pec, pec_mask, stretch);
     }
 
     void solve_implicit_ey1 (MultiFab& ey, MultiFab const& rhs,
@@ -988,8 +1421,15 @@ namespace
         copy_coeff_to_layout(Cb, *mat.Cb[1], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[0], periodicity);
         MultiFab const* pec_mask = pec_masks[2][1].get();
+        MultiFab stretch_mf;
+        MultiFab const* stretch = nullptr;
+        if (adi_pml_on()) {
+            stretch_mf = make_rhs(ey);
+            copy_cc_profile_to_layout(stretch_mf, WarpX::GetInstance().get_adi_pml_stretch(2), periodicity);
+            stretch = &stretch_mf;
+        }
         solve_implicit_component(ey, rhs, Cb, Db,
-                                 1, 2, c.inv_dz * c.inv_dz, pec, pec_mask);
+                                 1, 2, c.inv_dz * c.inv_dz, pec, pec_mask, stretch);
     }
 
     void solve_implicit_ez1 (MultiFab& ez, MultiFab const& rhs,
@@ -1002,8 +1442,15 @@ namespace
         copy_coeff_to_layout(Cb, *mat.Cb[2], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[1], periodicity);
         MultiFab const* pec_mask = pec_masks[0][2].get();
+        MultiFab stretch_mf;
+        MultiFab const* stretch = nullptr;
+        if (adi_pml_on()) {
+            stretch_mf = make_rhs(ez);
+            copy_cc_profile_to_layout(stretch_mf, WarpX::GetInstance().get_adi_pml_stretch(0), periodicity);
+            stretch = &stretch_mf;
+        }
         solve_implicit_component(ez, rhs, Cb, Db,
-                                 2, 0, c.inv_dx * c.inv_dx, pec, pec_mask);
+                                 2, 0, c.inv_dx * c.inv_dx, pec, pec_mask, stretch);
     }
 
     void solve_implicit_ex2 (MultiFab& ex, MultiFab const& rhs,
@@ -1016,8 +1463,15 @@ namespace
         copy_coeff_to_layout(Cb, *mat.Cb[0], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[1], periodicity);
         MultiFab const* pec_mask = pec_masks[2][0].get();
+        MultiFab stretch_mf;
+        MultiFab const* stretch = nullptr;
+        if (adi_pml_on()) {
+            stretch_mf = make_rhs(ex);
+            copy_cc_profile_to_layout(stretch_mf, WarpX::GetInstance().get_adi_pml_stretch(2), periodicity);
+            stretch = &stretch_mf;
+        }
         solve_implicit_component(ex, rhs, Cb, Db,
-                                 0, 2, c.inv_dz * c.inv_dz, pec, pec_mask);
+                                 0, 2, c.inv_dz * c.inv_dz, pec, pec_mask, stretch);
     }
 
     void solve_implicit_ey2 (MultiFab& ey, MultiFab const& rhs,
@@ -1030,8 +1484,15 @@ namespace
         copy_coeff_to_layout(Cb, *mat.Cb[1], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[2], periodicity);
         MultiFab const* pec_mask = pec_masks[0][1].get();
+        MultiFab stretch_mf;
+        MultiFab const* stretch = nullptr;
+        if (adi_pml_on()) {
+            stretch_mf = make_rhs(ey);
+            copy_cc_profile_to_layout(stretch_mf, WarpX::GetInstance().get_adi_pml_stretch(0), periodicity);
+            stretch = &stretch_mf;
+        }
         solve_implicit_component(ey, rhs, Cb, Db,
-                                 1, 0, c.inv_dx * c.inv_dx, pec, pec_mask);
+                                 1, 0, c.inv_dx * c.inv_dx, pec, pec_mask, stretch);
     }
 
     void solve_implicit_ez2 (MultiFab& ez, MultiFab const& rhs,
@@ -1044,8 +1505,15 @@ namespace
         copy_coeff_to_layout(Cb, *mat.Cb[2], periodicity);
         copy_coeff_to_layout(Db, *mat.Db[0], periodicity);
         MultiFab const* pec_mask = pec_masks[1][2].get();
+        MultiFab stretch_mf;
+        MultiFab const* stretch = nullptr;
+        if (adi_pml_on()) {
+            stretch_mf = make_rhs(ez);
+            copy_cc_profile_to_layout(stretch_mf, WarpX::GetInstance().get_adi_pml_stretch(1), periodicity);
+            stretch = &stretch_mf;
+        }
         solve_implicit_component(ez, rhs, Cb, Db,
-                                 2, 1, c.inv_dy * c.inv_dy, pec, pec_mask);
+                                 2, 1, c.inv_dy * c.inv_dy, pec, pec_mask, stretch);
     }
 
     void step_jx (MultiFab& jx, MultiFab const& ex_old, MultiFab const& ex_new,
@@ -1144,6 +1612,178 @@ namespace
         }
     }
 
+    void step_bx_pml (MultiFab& bx, MultiFab const& ey, MultiFab const& ez,
+                      AdiCoeffs const& c, Periodicity const& periodicity)
+    {
+        WarpX& warpx = WarpX::GetInstance();
+        MultiFab kz = make_rhs(bx);
+        MultiFab ky = make_rhs(bx);
+        copy_cc_profile_to_layout(kz, warpx.get_adi_pml_stretch(2), periodicity);
+        copy_cc_profile_to_layout(ky, warpx.get_adi_pml_stretch(1), periodicity);
+        MultiFab const& psi_hxz = warpx.get_adi_psi_h(AdiPsiH::HXZ);
+        MultiFab const& psi_hxy = warpx.get_adi_psi_h(AdiPsiH::HXY);
+        for (MFIter mfi(bx); mfi.isValid(); ++mfi) {
+            auto const bx_arr = bx.array(mfi);
+            auto const ey_arr = ey.const_array(mfi);
+            auto const ez_arr = ez.const_array(mfi);
+            auto const kz_arr = kz.const_array(mfi);
+            auto const ky_arr = ky.const_array(mfi);
+            auto const phxz = psi_hxz.const_array(mfi);
+            auto const phxy = psi_hxy.const_array(mfi);
+            Box const& b = mfi.validbox();
+            ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                bx_arr(i,j,k) += c.dtd2 * (
+                    (c.inv_dz / kz_arr(i,j,k)) * (ey_arr(i,j,k+1) - ey_arr(i,j,k)) -
+                    (c.inv_dy / ky_arr(i,j,k)) * (ez_arr(i,j+1,k) - ez_arr(i,j,k)) +
+                    phxz(i,j,k) - phxy(i,j,k));
+            });
+        }
+    }
+
+    void step_by_pml (MultiFab& by, MultiFab const& ez, MultiFab const& ex,
+                      AdiCoeffs const& c, Periodicity const& periodicity)
+    {
+        WarpX& warpx = WarpX::GetInstance();
+        MultiFab kx = make_rhs(by);
+        MultiFab kz = make_rhs(by);
+        copy_cc_profile_to_layout(kx, warpx.get_adi_pml_stretch(0), periodicity);
+        copy_cc_profile_to_layout(kz, warpx.get_adi_pml_stretch(2), periodicity);
+        MultiFab const& psi_hyx = warpx.get_adi_psi_h(AdiPsiH::HYX);
+        MultiFab const& psi_hyz = warpx.get_adi_psi_h(AdiPsiH::HYZ);
+        for (MFIter mfi(by); mfi.isValid(); ++mfi) {
+            auto const by_arr = by.array(mfi);
+            auto const ez_arr = ez.const_array(mfi);
+            auto const ex_arr = ex.const_array(mfi);
+            auto const kx_arr = kx.const_array(mfi);
+            auto const kz_arr = kz.const_array(mfi);
+            auto const phyx = psi_hyx.const_array(mfi);
+            auto const phyz = psi_hyz.const_array(mfi);
+            Box const& b = mfi.validbox();
+            ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                by_arr(i,j,k) += c.dtd2 * (
+                    (c.inv_dx / kx_arr(i,j,k)) * (ez_arr(i+1,j,k) - ez_arr(i,j,k)) -
+                    (c.inv_dz / kz_arr(i,j,k)) * (ex_arr(i,j,k+1) - ex_arr(i,j,k)) +
+                    phyx(i,j,k) - phyz(i,j,k));
+            });
+        }
+    }
+
+    void step_bz_pml (MultiFab& bz, MultiFab const& ex, MultiFab const& ey,
+                      AdiCoeffs const& c, Periodicity const& periodicity)
+    {
+        WarpX& warpx = WarpX::GetInstance();
+        MultiFab ky = make_rhs(bz);
+        MultiFab kx = make_rhs(bz);
+        copy_cc_profile_to_layout(ky, warpx.get_adi_pml_stretch(1), periodicity);
+        copy_cc_profile_to_layout(kx, warpx.get_adi_pml_stretch(0), periodicity);
+        MultiFab const& psi_hzy = warpx.get_adi_psi_h(AdiPsiH::HZY);
+        MultiFab const& psi_hzx = warpx.get_adi_psi_h(AdiPsiH::HZX);
+        for (MFIter mfi(bz); mfi.isValid(); ++mfi) {
+            auto const bz_arr = bz.array(mfi);
+            auto const ex_arr = ex.const_array(mfi);
+            auto const ey_arr = ey.const_array(mfi);
+            auto const ky_arr = ky.const_array(mfi);
+            auto const kx_arr = kx.const_array(mfi);
+            auto const phzy = psi_hzy.const_array(mfi);
+            auto const phzx = psi_hzx.const_array(mfi);
+            Box const& b = mfi.validbox();
+            ParallelFor(b, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                bz_arr(i,j,k) += c.dtd2 * (
+                    (c.inv_dy / ky_arr(i,j,k)) * (ex_arr(i,j+1,k) - ex_arr(i,j,k)) -
+                    (c.inv_dx / kx_arr(i,j,k)) * (ey_arr(i+1,j,k) - ey_arr(i,j,k)) +
+                    phzy(i,j,k) - phzx(i,j,k));
+            });
+        }
+    }
+
+    void update_one_psi (
+        MultiFab& psi, int deriv_dir, MultiFab const& src,
+        IntVect const& off, Real dinv, Periodicity const& periodicity)
+    {
+        WarpX& warpx = WarpX::GetInstance();
+        MultiFab acoef = make_rhs(psi);
+        MultiFab bcoef = make_rhs(psi);
+        copy_cc_profile_to_layout(acoef, warpx.get_adi_pml_a(deriv_dir), periodicity);
+        copy_cc_profile_to_layout(bcoef, warpx.get_adi_pml_b(deriv_dir), periodicity);
+        for (MFIter mfi(psi); mfi.isValid(); ++mfi) {
+            auto const psi_arr = psi.array(mfi);
+            auto const a_arr = acoef.const_array(mfi);
+            auto const b_arr = bcoef.const_array(mfi);
+            auto const src_arr = src.const_array(mfi);
+            Box const& bx = mfi.validbox();
+            int const oi = off[0];
+            int const oj = off[1];
+            int const ok = off[2];
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                Real const dnum = src_arr(i+oi, j+oj, k+ok) - src_arr(i,j,k);
+                psi_arr(i,j,k) = b_arr(i,j,k) * psi_arr(i,j,k)
+                    + a_arr(i,j,k) * dinv * dnum;
+            });
+        }
+        psi.FillBoundary(periodicity);
+        psi.setBndry(0._rt);
+    }
+
+    void update_psi_e (FieldArray const& Hold, AdiCoeffs const& c,
+                       Periodicity const& periodicity)
+    {
+        WarpX& warpx = WarpX::GetInstance();
+        update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EXY), 1, *Hold[2],
+                       IntVect(0,-1,0), c.inv_dy, periodicity);
+        update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EXZ), 2, *Hold[1],
+                       IntVect(0,0,-1), c.inv_dz, periodicity);
+        update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EYX), 0, *Hold[2],
+                       IntVect(-1,0,0), c.inv_dx, periodicity);
+        update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EYZ), 2, *Hold[0],
+                       IntVect(0,0,-1), c.inv_dz, periodicity);
+        update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EZX), 0, *Hold[1],
+                       IntVect(-1,0,0), c.inv_dx, periodicity);
+        update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EZY), 1, *Hold[0],
+                       IntVect(0,-1,0), c.inv_dy, periodicity);
+    }
+
+    void update_psi_h_first (FieldArray const& Enew, MultiFab const& Ex0,
+                             MultiFab const& Ey0, MultiFab const& Ez0,
+                             AdiCoeffs const& c, Periodicity const& periodicity)
+    {
+        WarpX& warpx = WarpX::GetInstance();
+        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HXY), 1, Ez0,
+                       IntVect(0,1,0), c.inv_dy, periodicity);
+        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HXZ), 2, *Enew[1],
+                       IntVect(0,0,1), c.inv_dz, periodicity);
+        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HYX), 0, *Enew[2],
+                       IntVect(1,0,0), c.inv_dx, periodicity);
+        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HYZ), 2, Ex0,
+                       IntVect(0,0,1), c.inv_dz, periodicity);
+        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HZX), 0, Ey0,
+                       IntVect(1,0,0), c.inv_dx, periodicity);
+        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HZY), 1, *Enew[0],
+                       IntVect(0,1,0), c.inv_dy, periodicity);
+    }
+
+    void update_psi_h_second (FieldArray const& Enew, MultiFab const& Exh,
+                              MultiFab const& Eyh, MultiFab const& Ezh,
+                              AdiCoeffs const& c, Periodicity const& periodicity)
+    {
+        WarpX& warpx = WarpX::GetInstance();
+        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HXY), 1, *Enew[2],
+                       IntVect(0,1,0), c.inv_dy, periodicity);
+        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HXZ), 2, Eyh,
+                       IntVect(0,0,1), c.inv_dz, periodicity);
+        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HYX), 0, Ezh,
+                       IntVect(1,0,0), c.inv_dx, periodicity);
+        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HYZ), 2, Exh,
+                       IntVect(0,0,1), c.inv_dz, periodicity);
+        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HZX), 0, Eyh,
+                       IntVect(1,0,0), c.inv_dx, periodicity);
+        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HZY), 1, *Enew[0],
+                       IntVect(0,1,0), c.inv_dy, periodicity);
+    }
+
     void adi_first_half_step (
         FieldArray& Efield,
         FieldArray& Bfield,
@@ -1159,6 +1799,14 @@ namespace
         MultiFab Ex0 = make_copy(*Efield[0]);
         MultiFab Ey0 = make_copy(*Efield[1]);
         MultiFab Ez0 = make_copy(*Efield[2]);
+        FieldArray Hold;
+        if (adi_pml_on()) {
+            for (int comp = 0; comp < 3; ++comp) {
+                Hold[comp] = make_like(*mat.H[comp]);
+                MultiFab::Copy(*Hold[comp], *mat.H[comp], 0, 0, 1,
+                               mat.H[comp]->nGrowVect());
+            }
+        }
 
         copy_fields(Efield_adi[1], Efield, periodicity);
         copy_fields(Bfield_adi[1], mat.H, periodicity);
@@ -1200,9 +1848,17 @@ namespace
             warpx.FillBoundaryJ(warpx.getngEB());
         }
 
-        step_bx(*Bfield[0], *Efield[1], Ez0, c);
-        step_by(*Bfield[1], *Efield[2], Ex0, c);
-        step_bz(*Bfield[2], *Efield[0], Ey0, c);
+        if (adi_pml_on()) {
+            step_bx_pml(*Bfield[0], *Efield[1], Ez0, c, periodicity);
+            step_by_pml(*Bfield[1], *Efield[2], Ex0, c, periodicity);
+            step_bz_pml(*Bfield[2], *Efield[0], Ey0, c, periodicity);
+            update_psi_e(Hold, c, periodicity);
+            update_psi_h_first(Efield, Ex0, Ey0, Ez0, c, periodicity);
+        } else {
+            step_bx(*Bfield[0], *Efield[1], Ez0, c);
+            step_by(*Bfield[1], *Efield[2], Ex0, c);
+            step_bz(*Bfield[2], *Efield[0], Ey0, c);
+        }
 
         fill_boundary_and_sync(Bfield, periodicity);
     }
@@ -1222,6 +1878,14 @@ namespace
         MultiFab Exh = make_copy(*Efield[0]);
         MultiFab Eyh = make_copy(*Efield[1]);
         MultiFab Ezh = make_copy(*Efield[2]);
+        FieldArray Hold;
+        if (adi_pml_on()) {
+            for (int comp = 0; comp < 3; ++comp) {
+                Hold[comp] = make_like(*mat.H[comp]);
+                MultiFab::Copy(*Hold[comp], *mat.H[comp], 0, 0, 1,
+                               mat.H[comp]->nGrowVect());
+            }
+        }
 
         copy_fields(Efield_adi[2], Efield, periodicity);
         copy_fields(Bfield_adi[2], mat.H, periodicity);
@@ -1263,9 +1927,17 @@ namespace
             warpx.FillBoundaryJ(warpx.getngEB());
         }
 
-        step_bx(*Bfield[0], Eyh, *Efield[2], c);
-        step_by(*Bfield[1], Ezh, *Efield[0], c);
-        step_bz(*Bfield[2], Exh, *Efield[1], c);
+        if (adi_pml_on()) {
+            step_bx_pml(*Bfield[0], Eyh, *Efield[2], c, periodicity);
+            step_by_pml(*Bfield[1], Ezh, *Efield[0], c, periodicity);
+            step_bz_pml(*Bfield[2], Exh, *Efield[1], c, periodicity);
+            update_psi_e(Hold, c, periodicity);
+            update_psi_h_second(Efield, Exh, Eyh, Ezh, c, periodicity);
+        } else {
+            step_bx(*Bfield[0], Eyh, *Efield[2], c);
+            step_by(*Bfield[1], Ezh, *Efield[0], c);
+            step_bz(*Bfield[2], Exh, *Efield[1], c);
+        }
 
         fill_boundary_and_sync(Bfield, periodicity);
     }
@@ -1295,6 +1967,7 @@ FiniteDifferenceSolver::MacroscopicEvolveADI (
         m_grid_type == GridType::Staggered,
         "Macroscopic ADI currently supports only staggered Yee fields.");
     PecConfig const pec = get_pec_config(periodicity);
+    WarpX::GetInstance().UpdateAdiPmlRecursionCoeffs(dt);
 
     Real const dx = 1._rt / m_h_stencil_coefs_x[0];
     Real const dy = 1._rt / m_h_stencil_coefs_y[0];
