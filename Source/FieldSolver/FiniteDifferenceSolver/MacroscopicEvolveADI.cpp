@@ -453,15 +453,17 @@ namespace
     }
 
     void add_soft_e_source_to_rhs (
-        MultiFab& rhs, MultiFab const& Cb, int e_comp)
+        MultiFab& rhs, MultiFab const& Cb, int e_comp, int half_step)
     {
         if (WarpX::E_excitation_grid_s != "parse_e_excitation_grid_function") {
             return;
         }
 
         WarpX& warpx = WarpX::GetInstance();
-
-        Real const time = warpx.gett_new(0) + 0.5_rt * warpx.getdt(0);
+        // (1/2) S^{n+1/4} on the first half, (1/2) S^{n+3/4} on the second.
+        Real const time_frac = (half_step == 1) ? 0.25_rt : 0.75_rt;
+        Real const weight = 0.5_rt;
+        Real const time = warpx.gett_new(0) + time_frac * warpx.getdt(0);
         auto const field_parser =
             (e_comp == 0) ? warpx.Exfield_xt_grid_parser->compile<4>() :
             (e_comp == 1) ? warpx.Eyfield_xt_grid_parser->compile<4>() :
@@ -498,7 +500,7 @@ namespace
                     // Ampère current. Divide by Cb so the contribution to E is
                     // independent of the material prefactor on the RHS curl terms.
                     rhs_arr(i,j,k) +=
-                        field_parser(x, y, z, time) / cb_arr(i,j,k);
+                        weight * field_parser(x, y, z, time) / cb_arr(i,j,k);
                 } else if (flag_type > 0._rt) {
                     amrex::Abort(
                         "Macroscopic ADI RHS-coupled E excitation supports only soft sources.");
@@ -713,8 +715,10 @@ namespace
     {
         MultiFab rhs = make_rhs(ex);
         MultiFab p_field = make_rhs(ex);
+        MultiFab cb_field = make_rhs(ex);
         MultiFab db_field = make_coeff_like(ex, *mat.Db[2]);
         copy_coeff_to_layout(p_field, *mat.p[0], periodicity);
+        copy_coeff_to_layout(cb_field, *mat.Cb[0], periodicity);
         copy_coeff_to_layout(db_field, *mat.Db[2], periodicity);
         for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
             auto const rhs_arr = rhs.array(mfi);
@@ -741,6 +745,7 @@ namespace
         }
         add_lumped_inductor_current_to_rhs(
             rhs, *mat.kappa[0], 0, periodicity);
+        add_soft_e_source_to_rhs(rhs, cb_field, 0, 1);
         return rhs;
     }
 
@@ -753,8 +758,10 @@ namespace
     {
         MultiFab rhs = make_rhs(ey);
         MultiFab p_field = make_rhs(ey);
+        MultiFab cb_field = make_rhs(ey);
         MultiFab db_field = make_coeff_like(ey, *mat.Db[0]);
         copy_coeff_to_layout(p_field, *mat.p[1], periodicity);
+        copy_coeff_to_layout(cb_field, *mat.Cb[1], periodicity);
         copy_coeff_to_layout(db_field, *mat.Db[0], periodicity);
         for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
             auto const rhs_arr = rhs.array(mfi);
@@ -781,6 +788,7 @@ namespace
         }
         add_lumped_inductor_current_to_rhs(
             rhs, *mat.kappa[1], 1, periodicity);
+        add_soft_e_source_to_rhs(rhs, cb_field, 1, 1);
         return rhs;
     }
 
@@ -793,8 +801,10 @@ namespace
     {
         MultiFab rhs = make_rhs(ez);
         MultiFab p_field = make_rhs(ez);
+        MultiFab cb_field = make_rhs(ez);
         MultiFab db_field = make_coeff_like(ez, *mat.Db[1]);
         copy_coeff_to_layout(p_field, *mat.p[2], periodicity);
+        copy_coeff_to_layout(cb_field, *mat.Cb[2], periodicity);
         copy_coeff_to_layout(db_field, *mat.Db[1], periodicity);
         for (MFIter mfi(rhs); mfi.isValid(); ++mfi) {
             auto const rhs_arr = rhs.array(mfi);
@@ -821,6 +831,7 @@ namespace
         }
         add_lumped_inductor_current_to_rhs(
             rhs, *mat.kappa[2], 2, periodicity);
+        add_soft_e_source_to_rhs(rhs, cb_field, 2, 1);
         return rhs;
     }
 
@@ -863,7 +874,7 @@ namespace
         }
         add_lumped_inductor_current_to_rhs(
             rhs, *mat.kappa[0], 0, periodicity);
-        add_soft_e_source_to_rhs(rhs, cb_field, 0);
+        add_soft_e_source_to_rhs(rhs, cb_field, 0, 2);
         return rhs;
     }
 
@@ -906,7 +917,7 @@ namespace
         }
         add_lumped_inductor_current_to_rhs(
             rhs, *mat.kappa[1], 1, periodicity);
-        add_soft_e_source_to_rhs(rhs, cb_field, 1);
+        add_soft_e_source_to_rhs(rhs, cb_field, 1, 2);
         return rhs;
     }
 
@@ -949,7 +960,7 @@ namespace
         }
         add_lumped_inductor_current_to_rhs(
             rhs, *mat.kappa[2], 2, periodicity);
-        add_soft_e_source_to_rhs(rhs, cb_field, 2);
+        add_soft_e_source_to_rhs(rhs, cb_field, 2, 2);
         return rhs;
     }
 
