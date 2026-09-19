@@ -1494,6 +1494,8 @@ private:
     void PostRestart ();
 
     void InitPML ();
+    /** Grow Geom(0) by pml_ncell on PML faces when ADI uses outside-domain PML. */
+    void GrowDomainForAdiOutsidePML ();
     void InitAdiPML ();
     void ComputePMLFactors ();
 

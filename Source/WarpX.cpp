@@ -1277,6 +1277,9 @@ WarpX::ReadParameters ()
             em_solver_medium == MediumForEM::Macroscopic,
             "algo.time_stepping_scheme=adi requires "
             "algo.em_solver_medium=macroscopic.");
+        // Before InitFromScratch: extend Geom(0) so ADI CFS-PML layers sit
+        // outside the user-specified physical box (do_pml_in_domain = 0).
+        GrowDomainForAdiOutsidePML();
         if (em_solver_medium == MediumForEM::Macroscopic ) {
             macroscopic_solver_algo = GetAlgorithmInteger(pp_algo,"macroscopic_sigma_method");
         }

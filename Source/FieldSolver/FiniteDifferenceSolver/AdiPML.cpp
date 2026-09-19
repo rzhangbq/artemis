@@ -10,6 +10,9 @@
 #include <AMReX_IntVect.H>
 #include <AMReX_MFIter.H>
 #include <AMReX_MultiFab.H>
+#include <AMReX_Geometry.H>
+#include <AMReX_ParmParse.H>
+#include <AMReX_RealBox.H>
 #include <AMReX_Print.H>
 
 #include <array>
@@ -57,6 +60,95 @@ namespace
 }
 
 void
+WarpX::GrowDomainForAdiOutsidePML ()
+{
+#if (AMREX_SPACEDIM != 3)
+    return;
+#else
+    if (macroscopic_time_integrator_algo != MacroscopicTimeSteppingScheme::ADI) {
+        return;
+    }
+    // In-domain mode: the user domain already includes the absorbing cells.
+    if (do_pml_in_domain) {
+        return;
+    }
+
+    IntVect grow_lo = IntVect::TheZeroVector();
+    IntVect grow_hi = IntVect::TheZeroVector();
+    bool need_grow = false;
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        if (field_boundary_lo[idim] == FieldBoundaryType::PML) {
+            grow_lo[idim] = pml_ncell;
+            need_grow = true;
+        }
+        if (field_boundary_hi[idim] == FieldBoundaryType::PML) {
+            grow_hi[idim] = pml_ncell;
+            need_grow = true;
+        }
+    }
+    if (!need_grow || pml_ncell <= 0) {
+        return;
+    }
+
+    Geometry const& g0 = Geom(0);
+    Box const domain0 = g0.Domain();
+    RealBox rb = g0.ProbDomain();
+    Real const* dx = g0.CellSize();
+
+    IntVect ncell;
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        ncell[idim] = domain0.length(idim);
+        if (grow_lo[idim] > 0) {
+            rb.setLo(idim, rb.lo(idim) - static_cast<Real>(grow_lo[idim]) * dx[idim]);
+            ncell[idim] += grow_lo[idim];
+        }
+        if (grow_hi[idim] > 0) {
+            rb.setHi(idim, rb.hi(idim) + static_cast<Real>(grow_hi[idim]) * dx[idim]);
+            ncell[idim] += grow_hi[idim];
+        }
+    }
+
+    IntVect const& bf = blockingFactor(0);
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+            ncell[idim] % bf[idim] == 0,
+            "ADI outside-domain PML: n_cell + pml_ncell must be divisible by "
+            "amr.blocking_factor in each PML direction.");
+    }
+
+    Box const new_domain(IntVect::TheZeroVector(),
+                         ncell - IntVect::TheUnitVector());
+    Array<int, AMREX_SPACEDIM> is_per{AMREX_D_DECL(0, 0, 0)};
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        is_per[idim] = static_cast<int>(g0.isPeriodic(idim));
+    }
+    Geometry const gnew(new_domain, rb, g0.Coord(), is_per);
+    SetGeometry(0, gnew);
+
+    // Keep ParmParse metadata consistent with the grown domain.
+    ParmParse pp_amr("amr");
+    Vector<int> n_cell_arr(AMREX_SPACEDIM);
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        n_cell_arr[idim] = ncell[idim];
+    }
+    pp_amr.addarr("n_cell", n_cell_arr);
+
+    ParmParse pp_geom("geometry");
+    Vector<Real> plo(AMREX_SPACEDIM), phi(AMREX_SPACEDIM);
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        plo[idim] = rb.lo(idim);
+        phi[idim] = rb.hi(idim);
+    }
+    pp_geom.addarr("prob_lo", plo);
+    pp_geom.addarr("prob_hi", phi);
+
+    amrex::Print() << "ADI CFS-PML: grew domain outside physical box by pml_ncell = "
+                   << pml_ncell
+                   << " (do_pml_in_domain = 0)\n";
+#endif
+}
+
+void
 WarpX::InitAdiPML ()
 {
     adi_pml = 0;
@@ -87,12 +179,6 @@ WarpX::InitAdiPML ()
     WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
         finest_level == 0,
         "Macroscopic ADI PML is implemented only for a single AMR level.");
-    WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
-        do_pml_in_domain != 0,
-        "Macroscopic ADI PML is in-domain only. Set warpx.do_pml_in_domain = 1 "
-        "so the outer warpx.pml_ncell cells of the existing domain are absorbing. "
-        "Extra-box WarpX PML (do_pml_in_domain = 0) is not used by ADI.");
-
     // Do not construct split-field pml[lev]; FDTD PML stays off.
     do_pml = 0;
 
@@ -152,7 +238,9 @@ WarpX::InitAdiPML ()
     FillAdiPmlProfiles();
     UpdateAdiPmlRecursionCoeffs(dt[0]);
 
-    amrex::Print() << "ADI CFS-PML: in-domain, pml_ncell = " << pml_ncell
+    amrex::Print() << "ADI CFS-PML: "
+                   << (do_pml_in_domain ? "in-domain" : "outside-domain")
+                   << ", pml_ncell = " << pml_ncell
                    << ", kappa_max = " << adi_pml_kappa_max
                    << ", alpha_max = " << adi_pml_alpha_max
                    << ", m = " << adi_pml_m << "\n";

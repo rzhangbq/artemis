@@ -1,8 +1,11 @@
 /* Convolutional (CFS) PML auxiliaries for the macroscopic ADI Maxwell solver.
  *
- * These are unsplit CPML fields on the existing ADI domain
- * (warpx.do_pml_in_domain = 1). They are not the split-field WarpX pml[lev]
- * boxes used by explicit FDTD.
+ * Unsplit CPML on the ADI grid (not split-field WarpX pml[lev] boxes).
+ * With warpx.do_pml_in_domain = 0 (default), GrowDomainForAdiOutsidePML()
+ * extends geometry.prob_* / amr.n_cell by pml_ncell outside the physical
+ * box before grids are created — same user-facing model as explicit FDTD
+ * outside-domain PML, but still one contiguous BoxArray for ADI pencils.
+ * With do_pml_in_domain = 1, the outer pml_ncell of the user domain absorb.
  */
 #ifndef WARPX_ADI_PML_H_
 #define WARPX_ADI_PML_H_

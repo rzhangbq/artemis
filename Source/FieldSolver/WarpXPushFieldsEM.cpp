@@ -1176,7 +1176,9 @@ WarpX::MacroscopicEvolveADI (int lev, PatchType patch_type, amrex::Real a_dt) {
     WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
         !(do_pml && pml[lev] && pml[lev]->ok()),
         "Macroscopic ADI does not use split-field pml[lev] boxes. "
-        "Set warpx.do_pml_in_domain = 1 for in-domain CFS-PML."
+        "Use boundary.field_* = pml with ADI CFS-PML "
+        "(do_pml_in_domain = 0 grows layers outside the physical box; "
+        "= 1 uses the outer pml_ncell of the user domain)."
     );
 
 #ifdef WARPX_MAG_LLG
