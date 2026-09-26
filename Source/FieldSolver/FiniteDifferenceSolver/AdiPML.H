@@ -22,8 +22,8 @@ namespace AdiPsiH
 
 namespace amrex { class MultiFab; }
 
-// quantity: 0 = kappa, 1 = a, 2 = b. Fills dst from physical coordinates
-// using dst's IndexType (cell or node) along `dir`.
+// quantity: 0 = kappa, 1 = a, 2 = b, 3 = S = 1/kappa + a.
+// Samples at dst's actual Yee location along `dir` (cell center or node).
 void FillAdiCfsOnLayout (amrex::MultiFab& dst, int dir, int quantity);
 
 #endif

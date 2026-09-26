@@ -402,10 +402,9 @@ WarpX::UpdateAdiPmlRecursionCoeffs (Real a_dt)
 void
 FillAdiCfsOnLayout (MultiFab& dst, int dir, int quantity)
 {
-    // Collocate with the cell-centered CFS profiles at the same integer index
-    // (standalone demo: setVal(fill) then ParallelCopy from CC). Evaluating at
-    // the nodal coordinate instead puts full σ on the outer PEC wall and is
-    // violently unstable at large CFL.
+    // Sample at the Yee location of `dst` along `dir`. Nodal points sit on
+    // the coordinate idx*Δs; cell-centered points sit on (idx+1/2)Δs.
+    // quantity 3 is the discrete implicit stretch S = 1/κ + a ≥ 0.
     Real const fill = (quantity == 1) ? 0._rt : 1._rt;
     dst.setVal(fill);
     if (!g_adi_cfs.on || dir < 0 || dir >= AMREX_SPACEDIM) {
@@ -416,6 +415,7 @@ FillAdiCfsOnLayout (MultiFab& dst, int dir, int quantity)
     int const idir = dir;
     int const qty = quantity;
     int const n_cells = p.n_cells[idir];
+    int const nodal = dst.ixType()[idir];
 
     for (MFIter mfi(dst); mfi.isValid(); ++mfi) {
         auto const arr = dst.array(mfi);
@@ -423,12 +423,15 @@ FillAdiCfsOnLayout (MultiFab& dst, int dir, int quantity)
         ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
         {
             int const idx = (idir == 0) ? i : ((idir == 1) ? j : k);
-            if (idx < 0 || idx >= n_cells) {
-                return; // keep fill: no CC partner (e.g. nodal hi wall)
+            if (idx < 0) { return; }
+            if (nodal) {
+                if (idx > n_cells) { return; }
+            } else if (idx >= n_cells) {
+                return;
             }
-            // Same sampling point as the CC profile arrays.
+            Real const stagger = nodal ? 0._rt : 0.5_rt;
             Real const coord = p.problo[idir]
-                + (static_cast<Real>(idx) + 0.5_rt) * p.dx[idir];
+                + (static_cast<Real>(idx) + stagger) * p.dx[idir];
             Real kappa = 1._rt;
             Real aval = 0._rt;
             Real bval = 1._rt;
@@ -458,8 +461,10 @@ FillAdiCfsOnLayout (MultiFab& dst, int dir, int quantity)
                 arr(i,j,k) = kappa;
             } else if (qty == 1) {
                 arr(i,j,k) = aval;
-            } else {
+            } else if (qty == 2) {
                 arr(i,j,k) = bval;
+            } else {
+                arr(i,j,k) = 1._rt / kappa + aval;
             }
         });
     }
