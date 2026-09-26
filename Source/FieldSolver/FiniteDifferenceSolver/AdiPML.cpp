@@ -243,7 +243,8 @@ WarpX::InitAdiPML ()
                    << ", pml_ncell = " << pml_ncell
                    << ", kappa_max = " << adi_pml_kappa_max
                    << ", alpha_max = " << adi_pml_alpha_max
-                   << ", m = " << adi_pml_m << "\n";
+                   << ", m = " << adi_pml_m
+                   << "\n";
 #endif
 }
 
@@ -404,7 +405,7 @@ FillAdiCfsOnLayout (MultiFab& dst, int dir, int quantity)
 {
     // Sample at the Yee location of `dst` along `dir`. Nodal points sit on
     // the coordinate idx*Δs; cell-centered points sit on (idx+1/2)Δs.
-    // quantity 3 is the discrete implicit stretch S = 1/κ + a ≥ 0.
+    // quantity 3 is the coordinate factor 1/κ used in the field update.
     Real const fill = (quantity == 1) ? 0._rt : 1._rt;
     dst.setVal(fill);
     if (!g_adi_cfs.on || dir < 0 || dir >= AMREX_SPACEDIM) {
@@ -464,7 +465,7 @@ FillAdiCfsOnLayout (MultiFab& dst, int dir, int quantity)
             } else if (qty == 2) {
                 arr(i,j,k) = bval;
             } else {
-                arr(i,j,k) = 1._rt / kappa + aval;
+                arr(i,j,k) = 1._rt / kappa;
             }
         });
     }

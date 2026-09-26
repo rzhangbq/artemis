@@ -172,7 +172,7 @@ namespace
             if (use_s) {
                 WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
                     stretch_h != nullptr,
-                    "Matched ADI PML requires both E-node and H-face stretch.");
+                    "ADI PML requires both E-node and H-face stretch.");
                 se_arr = stretch_e->const_array(mfi);
                 sh_arr = stretch_h->const_array(mfi);
             }
@@ -312,7 +312,7 @@ namespace
             if (use_s) {
                 WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
                     stretch_h != nullptr,
-                    "Matched ADI PML requires both E-node and H-face stretch.");
+                    "ADI PML requires both E-node and H-face stretch.");
                 se_arr = stretch_e->const_array(mfi);
                 sh_arr = stretch_h->const_array(mfi);
             }
@@ -562,14 +562,15 @@ namespace
     }
 
     AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+    // Lagged ψ: both implicit and explicit auxiliaries are still at the
+    // start of the half-step, so neither is multiplied by b.
     Real pml_elim_psi (
-        Real S, Real inv_d, Real q, Real r,
-        Real b_lo, Real b_hi,
+        Real inv_k, Real inv_d, Real q, Real r,
         Real psi_imp_lo, Real psi_imp_hi,
         Real psi_exp_lo, Real psi_exp_hi) noexcept
     {
-        return S * inv_d * (
-            (r * b_hi * psi_imp_hi - q * b_lo * psi_imp_lo)
+        return inv_k * inv_d * (
+            (r * psi_imp_hi - q * psi_imp_lo)
           - (r * psi_exp_hi - q * psi_exp_lo));
     }
 
@@ -866,22 +867,18 @@ namespace
             });
         }
         } else {
-            // Implicit y: S_y on Ampere/Faraday of Hz. Explicit z,x use 1/κ + ψ_new.
+            // Implicit y: 1/κ_y on Ampere and Faraday. Explicit curls use 1/κ + ψ^n.
             WarpX& warpx = WarpX::GetInstance();
             MultiFab Sy = make_rhs(ex);
             MultiFab kz = make_rhs(ex);
-            MultiFab be = make_rhs(ex);
             MultiFab kx_db = make_coeff_like(ex, *mat.Db[2]);
-            MultiFab bh_db = make_coeff_like(ex, *mat.Db[2]);
             MultiFab psi_e0 = make_rhs(ex);
             MultiFab psi_e1 = make_rhs(ex);
             MultiFab psi_himp = make_coeff_like(ex, *mat.Db[2]);
             MultiFab psi_hexp = make_coeff_like(ex, *mat.Db[2]);
             copy_cc_profile_to_layout(Sy, 1, 3, periodicity);
             copy_cc_profile_to_layout(kz, 2, 0, periodicity);
-            copy_cc_profile_to_layout(be, 1, 2, periodicity);
             copy_cc_profile_to_layout(kx_db, 0, 0, periodicity);
-            copy_cc_profile_to_layout(bh_db, 1, 2, periodicity);
             copy_coeff_to_layout(psi_e0, warpx.get_adi_psi_e(AdiPsiE::EXY), periodicity);
             copy_coeff_to_layout(psi_e1, warpx.get_adi_psi_e(AdiPsiE::EXZ), periodicity);
             copy_coeff_to_layout(psi_himp, warpx.get_adi_psi_h(AdiPsiH::HZY), periodicity);
@@ -896,9 +893,7 @@ namespace
                 auto const db_arr = db_field.const_array(mfi);
                 auto const Sy_arr = Sy.const_array(mfi);
                 auto const kz_arr = kz.const_array(mfi);
-                auto const be_arr = be.const_array(mfi);
                 auto const kx_arr = kx_db.const_array(mfi);
-                auto const bh_arr = bh_db.const_array(mfi);
                 auto const pe0 = psi_e0.const_array(mfi);
                 auto const pe1 = psi_e1.const_array(mfi);
                 auto const phimp = psi_himp.const_array(mfi);
@@ -908,20 +903,19 @@ namespace
                 {
                     Real const q = db_arr(i, j-1, k);
                     Real const r = db_arr(i, j, k);
-                    Real const S = Sy_arr(i,j,k);
+                    Real const inv_k = Sy_arr(i,j,k);
                     Real const curl_h =
-                        S * c.inv_dy * (hz_arr(i,j,k) - hz_arr(i,j-1,k)) -
+                        inv_k * c.inv_dy * (hz_arr(i,j,k) - hz_arr(i,j-1,k)) -
                         (c.inv_dz / kz_arr(i,j,k)) * (hy_arr(i,j,k) - hy_arr(i,j,k-1));
                     Real const ey_lo = ey_arr(i+1,j-1,k) - ey_arr(i,j-1,k);
                     Real const ey_hi = ey_arr(i+1,j,k) - ey_arr(i,j,k);
                     Real const kx_lo = kx_arr(i, j-1, k);
                     Real const kx_hi = kx_arr(i, j, k);
                     rhs_arr(i,j,k) = p_arr(i,j,k) * ex_arr(i,j,k) + curl_h
-                        + S * q * c.inv_dx * c.inv_dy * ey_lo / kx_lo
-                        - S * r * c.inv_dx * c.inv_dy * ey_hi / kx_hi
-                        + be_arr(i,j,k) * pe0(i,j,k) - pe1(i,j,k)
-                        + pml_elim_psi(S, c.inv_dy, q, r,
-                                       bh_arr(i,j-1,k), bh_arr(i,j,k),
+                        + inv_k * q * c.inv_dx * c.inv_dy * ey_lo / kx_lo
+                        - inv_k * r * c.inv_dx * c.inv_dy * ey_hi / kx_hi
+                        + pe0(i,j,k) - pe1(i,j,k)
+                        + pml_elim_psi(inv_k, c.inv_dy, q, r,
                                        phimp(i,j-1,k), phimp(i,j,k),
                                        phexp(i,j-1,k), phexp(i,j,k));
                 });
@@ -975,18 +969,14 @@ namespace
             WarpX& warpx = WarpX::GetInstance();
             MultiFab Sz = make_rhs(ey);
             MultiFab kx = make_rhs(ey);
-            MultiFab be = make_rhs(ey);
             MultiFab ky_db = make_coeff_like(ey, *mat.Db[0]);
-            MultiFab bh_db = make_coeff_like(ey, *mat.Db[0]);
             MultiFab psi_e0 = make_rhs(ey);
             MultiFab psi_e1 = make_rhs(ey);
             MultiFab psi_himp = make_coeff_like(ey, *mat.Db[0]);
             MultiFab psi_hexp = make_coeff_like(ey, *mat.Db[0]);
             copy_cc_profile_to_layout(Sz, 2, 3, periodicity);
             copy_cc_profile_to_layout(kx, 0, 0, periodicity);
-            copy_cc_profile_to_layout(be, 2, 2, periodicity);
             copy_cc_profile_to_layout(ky_db, 1, 0, periodicity);
-            copy_cc_profile_to_layout(bh_db, 2, 2, periodicity);
             copy_coeff_to_layout(psi_e0, warpx.get_adi_psi_e(AdiPsiE::EYZ), periodicity);
             copy_coeff_to_layout(psi_e1, warpx.get_adi_psi_e(AdiPsiE::EYX), periodicity);
             copy_coeff_to_layout(psi_himp, warpx.get_adi_psi_h(AdiPsiH::HXZ), periodicity);
@@ -1001,9 +991,7 @@ namespace
                 auto const db_arr = db_field.const_array(mfi);
                 auto const Sz_arr = Sz.const_array(mfi);
                 auto const kx_arr = kx.const_array(mfi);
-                auto const be_arr = be.const_array(mfi);
                 auto const ky_arr = ky_db.const_array(mfi);
-                auto const bh_arr = bh_db.const_array(mfi);
                 auto const pe0 = psi_e0.const_array(mfi);
                 auto const pe1 = psi_e1.const_array(mfi);
                 auto const phimp = psi_himp.const_array(mfi);
@@ -1013,20 +1001,19 @@ namespace
                 {
                     Real const q = db_arr(i, j, k-1);
                     Real const r = db_arr(i, j, k);
-                    Real const S = Sz_arr(i,j,k);
+                    Real const inv_k = Sz_arr(i,j,k);
                     Real const curl_h =
-                        S * c.inv_dz * (hx_arr(i,j,k) - hx_arr(i,j,k-1)) -
+                        inv_k * c.inv_dz * (hx_arr(i,j,k) - hx_arr(i,j,k-1)) -
                         (c.inv_dx / kx_arr(i,j,k)) * (hz_arr(i,j,k) - hz_arr(i-1,j,k));
                     Real const ez_lo = ez_arr(i,j+1,k-1) - ez_arr(i,j,k-1);
                     Real const ez_hi = ez_arr(i,j+1,k) - ez_arr(i,j,k);
                     Real const ky_lo = ky_arr(i, j, k-1);
                     Real const ky_hi = ky_arr(i, j, k);
                     rhs_arr(i,j,k) = p_arr(i,j,k) * ey_arr(i,j,k) + curl_h
-                        + S * q * c.inv_dy * c.inv_dz * ez_lo / ky_lo
-                        - S * r * c.inv_dy * c.inv_dz * ez_hi / ky_hi
-                        + be_arr(i,j,k) * pe0(i,j,k) - pe1(i,j,k)
-                        + pml_elim_psi(S, c.inv_dz, q, r,
-                                       bh_arr(i,j,k-1), bh_arr(i,j,k),
+                        + inv_k * q * c.inv_dy * c.inv_dz * ez_lo / ky_lo
+                        - inv_k * r * c.inv_dy * c.inv_dz * ez_hi / ky_hi
+                        + pe0(i,j,k) - pe1(i,j,k)
+                        + pml_elim_psi(inv_k, c.inv_dz, q, r,
                                        phimp(i,j,k-1), phimp(i,j,k),
                                        phexp(i,j,k-1), phexp(i,j,k));
                 });
@@ -1080,18 +1067,14 @@ namespace
             WarpX& warpx = WarpX::GetInstance();
             MultiFab Sx = make_rhs(ez);
             MultiFab ky = make_rhs(ez);
-            MultiFab be = make_rhs(ez);
             MultiFab kz_db = make_coeff_like(ez, *mat.Db[1]);
-            MultiFab bh_db = make_coeff_like(ez, *mat.Db[1]);
             MultiFab psi_e0 = make_rhs(ez);
             MultiFab psi_e1 = make_rhs(ez);
             MultiFab psi_himp = make_coeff_like(ez, *mat.Db[1]);
             MultiFab psi_hexp = make_coeff_like(ez, *mat.Db[1]);
             copy_cc_profile_to_layout(Sx, 0, 3, periodicity);
             copy_cc_profile_to_layout(ky, 1, 0, periodicity);
-            copy_cc_profile_to_layout(be, 0, 2, periodicity);
             copy_cc_profile_to_layout(kz_db, 2, 0, periodicity);
-            copy_cc_profile_to_layout(bh_db, 0, 2, periodicity);
             copy_coeff_to_layout(psi_e0, warpx.get_adi_psi_e(AdiPsiE::EZX), periodicity);
             copy_coeff_to_layout(psi_e1, warpx.get_adi_psi_e(AdiPsiE::EZY), periodicity);
             copy_coeff_to_layout(psi_himp, warpx.get_adi_psi_h(AdiPsiH::HYX), periodicity);
@@ -1106,9 +1089,7 @@ namespace
                 auto const db_arr = db_field.const_array(mfi);
                 auto const Sx_arr = Sx.const_array(mfi);
                 auto const ky_arr = ky.const_array(mfi);
-                auto const be_arr = be.const_array(mfi);
                 auto const kz_arr = kz_db.const_array(mfi);
-                auto const bh_arr = bh_db.const_array(mfi);
                 auto const pe0 = psi_e0.const_array(mfi);
                 auto const pe1 = psi_e1.const_array(mfi);
                 auto const phimp = psi_himp.const_array(mfi);
@@ -1118,20 +1099,19 @@ namespace
                 {
                     Real const q = db_arr(i-1, j, k);
                     Real const r = db_arr(i, j, k);
-                    Real const S = Sx_arr(i,j,k);
+                    Real const inv_k = Sx_arr(i,j,k);
                     Real const curl_h =
-                        S * c.inv_dx * (hy_arr(i,j,k) - hy_arr(i-1,j,k)) -
+                        inv_k * c.inv_dx * (hy_arr(i,j,k) - hy_arr(i-1,j,k)) -
                         (c.inv_dy / ky_arr(i,j,k)) * (hx_arr(i,j,k) - hx_arr(i,j-1,k));
                     Real const ex_lo = ex_arr(i-1,j,k+1) - ex_arr(i-1,j,k);
                     Real const ex_hi = ex_arr(i,j,k+1) - ex_arr(i,j,k);
                     Real const kz_lo = kz_arr(i-1, j, k);
                     Real const kz_hi = kz_arr(i, j, k);
                     rhs_arr(i,j,k) = p_arr(i,j,k) * ez_arr(i,j,k) + curl_h
-                        + S * q * c.inv_dz * c.inv_dx * ex_lo / kz_lo
-                        - S * r * c.inv_dz * c.inv_dx * ex_hi / kz_hi
-                        + be_arr(i,j,k) * pe0(i,j,k) - pe1(i,j,k)
-                        + pml_elim_psi(S, c.inv_dx, q, r,
-                                       bh_arr(i-1,j,k), bh_arr(i,j,k),
+                        + inv_k * q * c.inv_dz * c.inv_dx * ex_lo / kz_lo
+                        - inv_k * r * c.inv_dz * c.inv_dx * ex_hi / kz_hi
+                        + pe0(i,j,k) - pe1(i,j,k)
+                        + pml_elim_psi(inv_k, c.inv_dx, q, r,
                                        phimp(i-1,j,k), phimp(i,j,k),
                                        phexp(i-1,j,k), phexp(i,j,k));
                 });
@@ -1185,18 +1165,14 @@ namespace
             WarpX& warpx = WarpX::GetInstance();
             MultiFab Sz = make_rhs(ex);
             MultiFab ky = make_rhs(ex);
-            MultiFab be = make_rhs(ex);
             MultiFab kx_db = make_coeff_like(ex, *mat.Db[1]);
-            MultiFab bh_db = make_coeff_like(ex, *mat.Db[1]);
             MultiFab psi_e0 = make_rhs(ex);
             MultiFab psi_e1 = make_rhs(ex);
             MultiFab psi_himp = make_coeff_like(ex, *mat.Db[1]);
             MultiFab psi_hexp = make_coeff_like(ex, *mat.Db[1]);
             copy_cc_profile_to_layout(Sz, 2, 3, periodicity);
             copy_cc_profile_to_layout(ky, 1, 0, periodicity);
-            copy_cc_profile_to_layout(be, 2, 2, periodicity);
             copy_cc_profile_to_layout(kx_db, 0, 0, periodicity);
-            copy_cc_profile_to_layout(bh_db, 2, 2, periodicity);
             copy_coeff_to_layout(psi_e0, warpx.get_adi_psi_e(AdiPsiE::EXY), periodicity);
             copy_coeff_to_layout(psi_e1, warpx.get_adi_psi_e(AdiPsiE::EXZ), periodicity);
             copy_coeff_to_layout(psi_himp, warpx.get_adi_psi_h(AdiPsiH::HYZ), periodicity);
@@ -1211,9 +1187,7 @@ namespace
                 auto const db_arr = db_field.const_array(mfi);
                 auto const Sz_arr = Sz.const_array(mfi);
                 auto const ky_arr = ky.const_array(mfi);
-                auto const be_arr = be.const_array(mfi);
                 auto const kx_arr = kx_db.const_array(mfi);
-                auto const bh_arr = bh_db.const_array(mfi);
                 auto const pe0 = psi_e0.const_array(mfi);
                 auto const pe1 = psi_e1.const_array(mfi);
                 auto const phimp = psi_himp.const_array(mfi);
@@ -1223,20 +1197,19 @@ namespace
                 {
                     Real const q = db_arr(i, j, k-1);
                     Real const r = db_arr(i, j, k);
-                    Real const S = Sz_arr(i,j,k);
+                    Real const inv_k = Sz_arr(i,j,k);
                     Real const curl_h =
                         (c.inv_dy / ky_arr(i,j,k)) * (hz_arr(i,j,k) - hz_arr(i,j-1,k)) -
-                        S * c.inv_dz * (hy_arr(i,j,k) - hy_arr(i,j,k-1));
+                        inv_k * c.inv_dz * (hy_arr(i,j,k) - hy_arr(i,j,k-1));
                     Real const ez_lo = ez_arr(i+1,j,k-1) - ez_arr(i,j,k-1);
                     Real const ez_hi = ez_arr(i+1,j,k) - ez_arr(i,j,k);
                     Real const kx_lo = kx_arr(i, j, k-1);
                     Real const kx_hi = kx_arr(i, j, k);
                     rhs_arr(i,j,k) = p_arr(i,j,k) * ex_arr(i,j,k) + curl_h
-                        + S * q * c.inv_dx * c.inv_dz * ez_lo / kx_lo
-                        - S * r * c.inv_dx * c.inv_dz * ez_hi / kx_hi
-                        + pe0(i,j,k) - be_arr(i,j,k) * pe1(i,j,k)
-                        + pml_elim_psi(S, c.inv_dz, q, r,
-                                       bh_arr(i,j,k-1), bh_arr(i,j,k),
+                        + inv_k * q * c.inv_dx * c.inv_dz * ez_lo / kx_lo
+                        - inv_k * r * c.inv_dx * c.inv_dz * ez_hi / kx_hi
+                        + pe0(i,j,k) - pe1(i,j,k)
+                        + pml_elim_psi(inv_k, c.inv_dz, q, r,
                                        phimp(i,j,k-1), phimp(i,j,k),
                                        phexp(i,j,k-1), phexp(i,j,k));
                 });
@@ -1290,18 +1263,14 @@ namespace
             WarpX& warpx = WarpX::GetInstance();
             MultiFab Sx = make_rhs(ey);
             MultiFab kz = make_rhs(ey);
-            MultiFab be = make_rhs(ey);
             MultiFab ky_db = make_coeff_like(ey, *mat.Db[2]);
-            MultiFab bh_db = make_coeff_like(ey, *mat.Db[2]);
             MultiFab psi_e0 = make_rhs(ey);
             MultiFab psi_e1 = make_rhs(ey);
             MultiFab psi_himp = make_coeff_like(ey, *mat.Db[2]);
             MultiFab psi_hexp = make_coeff_like(ey, *mat.Db[2]);
             copy_cc_profile_to_layout(Sx, 0, 3, periodicity);
             copy_cc_profile_to_layout(kz, 2, 0, periodicity);
-            copy_cc_profile_to_layout(be, 0, 2, periodicity);
             copy_cc_profile_to_layout(ky_db, 1, 0, periodicity);
-            copy_cc_profile_to_layout(bh_db, 0, 2, periodicity);
             copy_coeff_to_layout(psi_e0, warpx.get_adi_psi_e(AdiPsiE::EYZ), periodicity);
             copy_coeff_to_layout(psi_e1, warpx.get_adi_psi_e(AdiPsiE::EYX), periodicity);
             copy_coeff_to_layout(psi_himp, warpx.get_adi_psi_h(AdiPsiH::HZX), periodicity);
@@ -1316,9 +1285,7 @@ namespace
                 auto const db_arr = db_field.const_array(mfi);
                 auto const Sx_arr = Sx.const_array(mfi);
                 auto const kz_arr = kz.const_array(mfi);
-                auto const be_arr = be.const_array(mfi);
                 auto const ky_arr = ky_db.const_array(mfi);
-                auto const bh_arr = bh_db.const_array(mfi);
                 auto const pe0 = psi_e0.const_array(mfi);
                 auto const pe1 = psi_e1.const_array(mfi);
                 auto const phimp = psi_himp.const_array(mfi);
@@ -1328,20 +1295,19 @@ namespace
                 {
                     Real const q = db_arr(i-1, j, k);
                     Real const r = db_arr(i, j, k);
-                    Real const S = Sx_arr(i,j,k);
+                    Real const inv_k = Sx_arr(i,j,k);
                     Real const curl_h =
                         (c.inv_dz / kz_arr(i,j,k)) * (hx_arr(i,j,k) - hx_arr(i,j,k-1)) -
-                        S * c.inv_dx * (hz_arr(i,j,k) - hz_arr(i-1,j,k));
+                        inv_k * c.inv_dx * (hz_arr(i,j,k) - hz_arr(i-1,j,k));
                     Real const ex_lo = ex_arr(i-1,j+1,k) - ex_arr(i-1,j,k);
                     Real const ex_hi = ex_arr(i,j+1,k) - ex_arr(i,j,k);
                     Real const ky_lo = ky_arr(i-1, j, k);
                     Real const ky_hi = ky_arr(i, j, k);
                     rhs_arr(i,j,k) = p_arr(i,j,k) * ey_arr(i,j,k) + curl_h
-                        + S * q * c.inv_dy * c.inv_dx * ex_lo / ky_lo
-                        - S * r * c.inv_dy * c.inv_dx * ex_hi / ky_hi
-                        + pe0(i,j,k) - be_arr(i,j,k) * pe1(i,j,k)
-                        + pml_elim_psi(S, c.inv_dx, q, r,
-                                       bh_arr(i-1,j,k), bh_arr(i,j,k),
+                        + inv_k * q * c.inv_dy * c.inv_dx * ex_lo / ky_lo
+                        - inv_k * r * c.inv_dy * c.inv_dx * ex_hi / ky_hi
+                        + pe0(i,j,k) - pe1(i,j,k)
+                        + pml_elim_psi(inv_k, c.inv_dx, q, r,
                                        phimp(i-1,j,k), phimp(i,j,k),
                                        phexp(i-1,j,k), phexp(i,j,k));
                 });
@@ -1395,18 +1361,14 @@ namespace
             WarpX& warpx = WarpX::GetInstance();
             MultiFab Sy = make_rhs(ez);
             MultiFab kx = make_rhs(ez);
-            MultiFab be = make_rhs(ez);
             MultiFab kz_db = make_coeff_like(ez, *mat.Db[0]);
-            MultiFab bh_db = make_coeff_like(ez, *mat.Db[0]);
             MultiFab psi_e0 = make_rhs(ez);
             MultiFab psi_e1 = make_rhs(ez);
             MultiFab psi_himp = make_coeff_like(ez, *mat.Db[0]);
             MultiFab psi_hexp = make_coeff_like(ez, *mat.Db[0]);
             copy_cc_profile_to_layout(Sy, 1, 3, periodicity);
             copy_cc_profile_to_layout(kx, 0, 0, periodicity);
-            copy_cc_profile_to_layout(be, 1, 2, periodicity);
             copy_cc_profile_to_layout(kz_db, 2, 0, periodicity);
-            copy_cc_profile_to_layout(bh_db, 1, 2, periodicity);
             copy_coeff_to_layout(psi_e0, warpx.get_adi_psi_e(AdiPsiE::EZX), periodicity);
             copy_coeff_to_layout(psi_e1, warpx.get_adi_psi_e(AdiPsiE::EZY), periodicity);
             copy_coeff_to_layout(psi_himp, warpx.get_adi_psi_h(AdiPsiH::HXY), periodicity);
@@ -1421,9 +1383,7 @@ namespace
                 auto const db_arr = db_field.const_array(mfi);
                 auto const Sy_arr = Sy.const_array(mfi);
                 auto const kx_arr = kx.const_array(mfi);
-                auto const be_arr = be.const_array(mfi);
                 auto const kz_arr = kz_db.const_array(mfi);
-                auto const bh_arr = bh_db.const_array(mfi);
                 auto const pe0 = psi_e0.const_array(mfi);
                 auto const pe1 = psi_e1.const_array(mfi);
                 auto const phimp = psi_himp.const_array(mfi);
@@ -1433,20 +1393,19 @@ namespace
                 {
                     Real const q = db_arr(i, j-1, k);
                     Real const r = db_arr(i, j, k);
-                    Real const S = Sy_arr(i,j,k);
+                    Real const inv_k = Sy_arr(i,j,k);
                     Real const curl_h =
                         (c.inv_dx / kx_arr(i,j,k)) * (hy_arr(i,j,k) - hy_arr(i-1,j,k)) -
-                        S * c.inv_dy * (hx_arr(i,j,k) - hx_arr(i,j-1,k));
+                        inv_k * c.inv_dy * (hx_arr(i,j,k) - hx_arr(i,j-1,k));
                     Real const ey_lo = ey_arr(i,j-1,k+1) - ey_arr(i,j-1,k);
                     Real const ey_hi = ey_arr(i,j,k+1) - ey_arr(i,j,k);
                     Real const kz_lo = kz_arr(i, j-1, k);
                     Real const kz_hi = kz_arr(i, j, k);
                     rhs_arr(i,j,k) = p_arr(i,j,k) * ez_arr(i,j,k) + curl_h
-                        + S * q * c.inv_dz * c.inv_dy * ey_lo / kz_lo
-                        - S * r * c.inv_dz * c.inv_dy * ey_hi / kz_hi
-                        + pe0(i,j,k) - be_arr(i,j,k) * pe1(i,j,k)
-                        + pml_elim_psi(S, c.inv_dy, q, r,
-                                       bh_arr(i,j-1,k), bh_arr(i,j,k),
+                        + inv_k * q * c.inv_dz * c.inv_dy * ey_lo / kz_lo
+                        - inv_k * r * c.inv_dz * c.inv_dy * ey_hi / kz_hi
+                        + pe0(i,j,k) - pe1(i,j,k)
+                        + pml_elim_psi(inv_k, c.inv_dy, q, r,
                                        phimp(i,j-1,k), phimp(i,j,k),
                                        phexp(i,j-1,k), phexp(i,j,k));
                 });
@@ -1971,10 +1930,6 @@ namespace
                 MultiFab::Copy(*Hold[comp], *mat.H[comp], 0, 0, 1,
                                mat.H[comp]->nGrowVect());
             }
-            // Explicit-direction convolutions from the same old E/H used
-            // in this half-step, so the eliminated E equation sees 1/s.
-            update_psi_e_explicit_first(Hold, c, periodicity);
-            update_psi_h_explicit_first(Ex0, Ey0, Ez0, c, periodicity);
         }
 
         copy_fields(Efield_adi[1], Efield, periodicity);
@@ -2018,10 +1973,14 @@ namespace
         }
 
         if (adi_pml_on()) {
-            update_psi_h_implicit_first(Efield, c, periodicity);
+            // Faraday still sees ψ from the start of the half-step. Every
+            // auxiliary then advances from the field that entered its curl.
             step_bx_pml(*Bfield[0], *Efield[1], Ez0, c, periodicity);
             step_by_pml(*Bfield[1], *Efield[2], Ex0, c, periodicity);
             step_bz_pml(*Bfield[2], *Efield[0], Ey0, c, periodicity);
+            update_psi_h_explicit_first(Ex0, Ey0, Ez0, c, periodicity);
+            update_psi_h_implicit_first(Efield, c, periodicity);
+            update_psi_e_explicit_first(Hold, c, periodicity);
             fill_h_from_b(Hold, Bfield, mat, c, periodicity);
             update_psi_e_implicit_first(Hold, c, periodicity);
         } else {
@@ -2056,8 +2015,6 @@ namespace
                 MultiFab::Copy(*Hold[comp], *mat.H[comp], 0, 0, 1,
                                mat.H[comp]->nGrowVect());
             }
-            update_psi_e_explicit_second(Hold, c, periodicity);
-            update_psi_h_explicit_second(Exh, Eyh, Ezh, c, periodicity);
         }
 
         copy_fields(Efield_adi[2], Efield, periodicity);
@@ -2101,10 +2058,12 @@ namespace
         }
 
         if (adi_pml_on()) {
-            update_psi_h_implicit_second(Efield, c, periodicity);
             step_bx_pml(*Bfield[0], Eyh, *Efield[2], c, periodicity);
             step_by_pml(*Bfield[1], Ezh, *Efield[0], c, periodicity);
             step_bz_pml(*Bfield[2], Exh, *Efield[1], c, periodicity);
+            update_psi_h_explicit_second(Exh, Eyh, Ezh, c, periodicity);
+            update_psi_h_implicit_second(Efield, c, periodicity);
+            update_psi_e_explicit_second(Hold, c, periodicity);
             fill_h_from_b(Hold, Bfield, mat, c, periodicity);
             update_psi_e_implicit_second(Hold, c, periodicity);
         } else {

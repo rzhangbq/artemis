@@ -22,8 +22,10 @@ namespace AdiPsiH
 
 namespace amrex { class MultiFab; }
 
-// quantity: 0 = kappa, 1 = a, 2 = b, 3 = S = 1/kappa + a.
+// quantity: 0 = kappa, 1 = a, 2 = b, 3 = 1/kappa.
 // Samples at dst's actual Yee location along `dir` (cell center or node).
+// The field update uses ψ from the start of the half-step and 1/κ.
+// Auxiliaries advance after E and B, using a and b.
 void FillAdiCfsOnLayout (amrex::MultiFab& dst, int dir, int quantity);
 
 #endif
