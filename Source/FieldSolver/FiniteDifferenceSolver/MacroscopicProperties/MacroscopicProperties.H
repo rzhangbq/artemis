@@ -19,6 +19,7 @@
 #include <AMReX_Parser.H>
 #include <AMReX_REAL.H>
 
+#include <array>
 #include <memory>
 #include <string>
 
@@ -46,6 +47,10 @@ public:
      /** return MultiFab, mu (permeability) of the medium. */
      amrex::MultiFab& getmu_mf  () {return (*m_mu_mf);}
      amrex::MultiFab * get_pointer_mu () {return m_mu_mf.get();}
+
+     /** Per-edge resistance [Ohm]; zero disables the resistor on that edge. */
+     std::array<std::unique_ptr<amrex::MultiFab>, 3> m_lumped_resistor_mf;
+     std::array<std::unique_ptr<amrex::Parser>, 3> m_lumped_resistor_parser;
 
      /** Gpu Vector with index type of coarsening ratio with default value (1,1,1) */
      amrex::GpuArray<int, 3> macro_cr_ratio;

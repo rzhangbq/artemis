@@ -713,6 +713,8 @@ namespace
             MultiFab& p = *coeffs.p[comp];
             MultiFab& kappa_mf = *coeffs.kappa[comp];
             MultiFab const* inductance_mf = inductance[comp];
+            MultiFab const* resistance_mf = WarpX::use_lumped_resistor
+                ? macroscopic_properties->m_lumped_resistor_mf[comp].get() : nullptr;
 
             // Fill only the valid region, then exchange ghosts below. Including the
             // grown tilebox here makes sample::Interp read sigma/epsilon outside their
@@ -727,6 +729,11 @@ namespace
                 if (inductance_mf != nullptr) {
                     inductance_arr = inductance_mf->const_array(mfi);
                 }
+                Array4<Real const> resistance_arr;
+                if (resistance_mf != nullptr) {
+                    resistance_arr = resistance_mf->const_array(mfi);
+                }
+                bool const has_resistor = resistance_mf != nullptr;
                 Box const& bx = mfi.tilebox(Cb.ixType().toIntVect());
                 auto const& estag = *e_stag[comp];
                 Real const scale = kappa_scale[comp];
@@ -735,10 +742,13 @@ namespace
 
                 ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
                 {
-                    Real const sigma = ablastr::coarsen::sample::Interp(
+                    Real const sigma_bulk = ablastr::coarsen::sample::Interp(
                         sigma_arr, sigma_stag, estag, macro_cr, i, j, k, scomp);
                     Real const eps = ablastr::coarsen::sample::Interp(
                         eps_arr, epsilon_stag, estag, macro_cr, i, j, k, scomp);
+                    Real const R = has_resistor ? resistance_arr(i,j,k) : 0._rt;
+                    // Parallel edge conductance: J_R = E * edge_length / (R * area).
+                    Real const sigma = sigma_bulk + ((R > 0._rt) ? scale / R : 0._rt);
                     Real const L = has_inductor ? inductance_arr(i,j,k) : 0._rt;
                     Real const kappa = (L > 0._rt) ? scale / L : 0._rt;
                     // Centering J_L in Ampere and E in dJ_L/dt over a half-step

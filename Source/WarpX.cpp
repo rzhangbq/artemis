@@ -226,6 +226,7 @@ amrex::Vector<ParticleBoundaryType> WarpX::particle_boundary_hi(AMREX_SPACEDIM,P
 int WarpX::yee_coupled_solver_algo;
 int WarpX::use_PEC_mask = 0;
 int WarpX::use_lumped_inductor = 0;
+int WarpX::use_lumped_resistor = 0;
 
 bool WarpX::do_current_centering = false;
 
@@ -1290,6 +1291,12 @@ WarpX::ReadParameters ()
 
         pp_algo.query("use_PEC_mask",use_PEC_mask);
         pp_algo.query("use_lumped_inductor",use_lumped_inductor);
+        ParmParse("warpx").query("use_lumped_resistor", use_lumped_resistor);
+        WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+            !use_lumped_resistor ||
+            (macroscopic_time_integrator_algo == MacroscopicTimeSteppingScheme::ADI &&
+             em_solver_medium == MediumForEM::Macroscopic && AMREX_SPACEDIM == 3),
+            "warpx.use_lumped_resistor requires 3D macroscopic ADI.");
 
         // Load balancing parameters
         std::vector<std::string> load_balance_intervals_string_vec = {"0"};

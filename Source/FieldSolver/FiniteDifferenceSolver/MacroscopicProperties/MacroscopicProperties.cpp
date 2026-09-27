@@ -42,6 +42,17 @@ MacroscopicProperties::ReadParameters ()
     // The vacuum values are used as default for the macroscopic parameters
     // with a warning message to the user to indicate that no value was specified.
 
+    if (WarpX::use_lumped_resistor) {
+        const std::array<std::string, 3> directions = {"x", "y", "z"};
+        for (int comp = 0; comp < 3; ++comp) {
+            std::string expression;
+            utils::parser::Store_parserString(pp_macroscopic,
+                "lumped_resistor_" + directions[comp] + "_function(x,y,z)", expression);
+            m_lumped_resistor_parser[comp] = std::make_unique<amrex::Parser>(
+                utils::parser::makeParser(expression, {"x", "y", "z"}));
+        }
+    }
+
     // Query mask index
     pp_macroscopic.query("npy_k_index", m_npy_k_index);
     pp_macroscopic.query("npy_k_index2", m_npy_k_index2);
@@ -251,6 +262,21 @@ MacroscopicProperties::InitData ()
     amrex::BoxArray ba = warpx.boxArray(lev);
     amrex::DistributionMapping dmap = warpx.DistributionMap(lev);
     const amrex::IntVect ng_EB_alloc = warpx.getngEB();
+    if (WarpX::use_lumped_resistor) {
+        for (int comp = 0; comp < 3; ++comp) {
+            auto const staggering = warpx.get_pointer_current_fp(lev, comp)->ixType();
+            auto& resistance = m_lumped_resistor_mf[comp];
+            resistance = std::make_unique<amrex::MultiFab>(
+                amrex::convert(ba, staggering), dmap, 1, ng_EB_alloc);
+            InitializeMacroMultiFabUsingParser(
+                resistance.get(), m_lumped_resistor_parser[comp]->compile<3>(), lev);
+            WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+                !resistance->contains_nan() && !resistance->contains_inf() &&
+                resistance->min(0) >= 0.,
+                "Lumped resistance must be finite and nonnegative; zero disables it.");
+        }
+    }
+
     // Define material property multifabs using ba and dmap from WarpX instance
     // sigma is cell-centered MultiFab
     m_sigma_mf = std::make_unique<amrex::MultiFab>(ba, dmap, 1, ng_EB_alloc);
