@@ -215,7 +215,7 @@ namespace
                 Real const beta = -db_seam * seam_scale * inv_d2;
 
                 // Physical coefficients first (needed for Sherman-Morrison corners).
-                // Matched CFS: α,γ use S_E(node) * S_H(face) with S = 1/κ + a.
+                // Lagged CPML: α,γ use S_E(node) * S_H(face), with S = 1/κ.
                 for (int p = 0; p < nsolve; ++p) {
                     int const s = lo + p;
                     Real const db_lo = (p == 0) ? db_seam
@@ -1781,8 +1781,8 @@ namespace
                     + a_arr(i,j,k) * dinv * dnum;
             });
         }
-        psi.FillBoundary(periodicity);
         psi.setBndry(0._rt);
+        psi.FillBoundary(periodicity);
     }
 
     // Electric auxiliaries use the same Yee difference as Ampere's curl:
