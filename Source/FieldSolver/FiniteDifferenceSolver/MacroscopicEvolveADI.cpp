@@ -554,7 +554,7 @@ namespace
         }
     }
 
-    // Fill CFS kappa (0), a (1), b (2), or S=1/κ+a (3) at dst's Yee location.
+    // Fill CFS kappa (0), a (1), b (2), or 1/κ (3) at dst's Yee location.
     void copy_cc_profile_to_layout (
         MultiFab& dst, int dir, int quantity, Periodicity const&)
     {
@@ -1787,102 +1787,45 @@ namespace
 
     // Electric auxiliaries use the same Yee difference as Ampere's curl:
     // dnum = H(i,j,k) - H(i-off), implemented as update_one_psi(..., -off, -inv).
-    void update_psi_e_explicit_first (FieldArray const& Hold, AdiCoeffs const& c,
-                                      Periodicity const& periodicity)
-    {
-        WarpX& warpx = WarpX::GetInstance();
-        update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EXZ), 2, *Hold[1],
-                       IntVect(0,0,-1), -c.inv_dz, periodicity);
-        update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EYX), 0, *Hold[2],
-                       IntVect(-1,0,0), -c.inv_dx, periodicity);
-        update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EZY), 1, *Hold[0],
-                       IntVect(0,-1,0), -c.inv_dy, periodicity);
-    }
-
-    void update_psi_e_implicit_first (FieldArray const& Hnew, AdiCoeffs const& c,
-                                      Periodicity const& periodicity)
+    // Gedney ADI-CPML updates every electric auxiliary from the completed H
+    // state at the end of the half-step.  The explicit/implicit split belongs
+    // to the field update, not to the subsequent convolution recursion.
+    void update_psi_e (FieldArray const& Hnew, AdiCoeffs const& c,
+                       Periodicity const& periodicity)
     {
         WarpX& warpx = WarpX::GetInstance();
         update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EXY), 1, *Hnew[2],
                        IntVect(0,-1,0), -c.inv_dy, periodicity);
-        update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EYZ), 2, *Hnew[0],
-                       IntVect(0,0,-1), -c.inv_dz, periodicity);
-        update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EZX), 0, *Hnew[1],
-                       IntVect(-1,0,0), -c.inv_dx, periodicity);
-    }
-
-    void update_psi_e_explicit_second (FieldArray const& Hold, AdiCoeffs const& c,
-                                       Periodicity const& periodicity)
-    {
-        WarpX& warpx = WarpX::GetInstance();
-        update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EXY), 1, *Hold[2],
-                       IntVect(0,-1,0), -c.inv_dy, periodicity);
-        update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EYZ), 2, *Hold[0],
-                       IntVect(0,0,-1), -c.inv_dz, periodicity);
-        update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EZX), 0, *Hold[1],
-                       IntVect(-1,0,0), -c.inv_dx, periodicity);
-    }
-
-    void update_psi_e_implicit_second (FieldArray const& Hnew, AdiCoeffs const& c,
-                                       Periodicity const& periodicity)
-    {
-        WarpX& warpx = WarpX::GetInstance();
         update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EXZ), 2, *Hnew[1],
                        IntVect(0,0,-1), -c.inv_dz, periodicity);
         update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EYX), 0, *Hnew[2],
+                       IntVect(-1,0,0), -c.inv_dx, periodicity);
+        update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EYZ), 2, *Hnew[0],
+                       IntVect(0,0,-1), -c.inv_dz, periodicity);
+        update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EZX), 0, *Hnew[1],
                        IntVect(-1,0,0), -c.inv_dx, periodicity);
         update_one_psi(warpx.get_adi_psi_e(AdiPsiE::EZY), 1, *Hnew[0],
                        IntVect(0,-1,0), -c.inv_dy, periodicity);
     }
 
-    void update_psi_h_explicit_first (MultiFab const& Ex0, MultiFab const& Ey0,
-                                      MultiFab const& Ez0, AdiCoeffs const& c,
-                                      Periodicity const& periodicity)
-    {
-        WarpX& warpx = WarpX::GetInstance();
-        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HXY), 1, Ez0,
-                       IntVect(0,1,0), c.inv_dy, periodicity);
-        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HYZ), 2, Ex0,
-                       IntVect(0,0,1), c.inv_dz, periodicity);
-        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HZX), 0, Ey0,
-                       IntVect(1,0,0), c.inv_dx, periodicity);
-    }
-
-    void update_psi_h_implicit_first (FieldArray const& Enew, AdiCoeffs const& c,
-                                      Periodicity const& periodicity)
-    {
-        WarpX& warpx = WarpX::GetInstance();
-        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HXZ), 2, *Enew[1],
-                       IntVect(0,0,1), c.inv_dz, periodicity);
-        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HYX), 0, *Enew[2],
-                       IntVect(1,0,0), c.inv_dx, periodicity);
-        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HZY), 1, *Enew[0],
-                       IntVect(0,1,0), c.inv_dy, periodicity);
-    }
-
-    void update_psi_h_explicit_second (MultiFab const& Exh, MultiFab const& Eyh,
-                                       MultiFab const& Ezh, AdiCoeffs const& c,
-                                       Periodicity const& periodicity)
-    {
-        WarpX& warpx = WarpX::GetInstance();
-        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HXZ), 2, Eyh,
-                       IntVect(0,0,1), c.inv_dz, periodicity);
-        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HYX), 0, Ezh,
-                       IntVect(1,0,0), c.inv_dx, periodicity);
-        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HZY), 1, Exh,
-                       IntVect(0,1,0), c.inv_dy, periodicity);
-    }
-
-    void update_psi_h_implicit_second (FieldArray const& Enew, AdiCoeffs const& c,
-                                       Periodicity const& periodicity)
+    // Likewise, all magnetic auxiliaries use the completed E state at the end
+    // of the half-step.  Field equations consume the old auxiliaries first.
+    void update_psi_h (FieldArray const& Enew, AdiCoeffs const& c,
+                       Periodicity const& periodicity)
     {
         WarpX& warpx = WarpX::GetInstance();
         update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HXY), 1, *Enew[2],
                        IntVect(0,1,0), c.inv_dy, periodicity);
+        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HXZ), 2, *Enew[1],
+                       IntVect(0,0,1), c.inv_dz, periodicity);
+        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HYX), 0, *Enew[2],
+                       IntVect(1,0,0), c.inv_dx, periodicity);
         update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HYZ), 2, *Enew[0],
                        IntVect(0,0,1), c.inv_dz, periodicity);
         update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HZX), 0, *Enew[1],
                        IntVect(1,0,0), c.inv_dx, periodicity);
+        update_one_psi(warpx.get_adi_psi_h(AdiPsiH::HZY), 1, *Enew[0],
+                       IntVect(0,1,0), c.inv_dy, periodicity);
     }
 
     void fill_h_from_b (FieldArray& H, FieldArray const& B,
@@ -1973,16 +1916,14 @@ namespace
         }
 
         if (adi_pml_on()) {
-            // Faraday still sees ψ from the start of the half-step. Every
-            // auxiliary then advances from the field that entered its curl.
+            // Field updates use ψ from the start of the half-step.  After all
+            // fields reach n+1/2, advance every auxiliary from that new state.
             step_bx_pml(*Bfield[0], *Efield[1], Ez0, c, periodicity);
             step_by_pml(*Bfield[1], *Efield[2], Ex0, c, periodicity);
             step_bz_pml(*Bfield[2], *Efield[0], Ey0, c, periodicity);
-            update_psi_h_explicit_first(Ex0, Ey0, Ez0, c, periodicity);
-            update_psi_h_implicit_first(Efield, c, periodicity);
-            update_psi_e_explicit_first(Hold, c, periodicity);
             fill_h_from_b(Hold, Bfield, mat, c, periodicity);
-            update_psi_e_implicit_first(Hold, c, periodicity);
+            update_psi_e(Hold, c, periodicity);
+            update_psi_h(Efield, c, periodicity);
         } else {
             step_bx(*Bfield[0], *Efield[1], Ez0, c);
             step_by(*Bfield[1], *Efield[2], Ex0, c);
@@ -2058,14 +1999,13 @@ namespace
         }
 
         if (adi_pml_on()) {
+            // Repeat the Gedney ordering at n+1: fields first, then all ψ.
             step_bx_pml(*Bfield[0], Eyh, *Efield[2], c, periodicity);
             step_by_pml(*Bfield[1], Ezh, *Efield[0], c, periodicity);
             step_bz_pml(*Bfield[2], Exh, *Efield[1], c, periodicity);
-            update_psi_h_explicit_second(Exh, Eyh, Ezh, c, periodicity);
-            update_psi_h_implicit_second(Efield, c, periodicity);
-            update_psi_e_explicit_second(Hold, c, periodicity);
             fill_h_from_b(Hold, Bfield, mat, c, periodicity);
-            update_psi_e_implicit_second(Hold, c, periodicity);
+            update_psi_e(Hold, c, periodicity);
+            update_psi_h(Efield, c, periodicity);
         } else {
             step_bx(*Bfield[0], Eyh, *Efield[2], c);
             step_by(*Bfield[1], Ezh, *Efield[0], c);
