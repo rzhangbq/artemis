@@ -52,6 +52,10 @@ public:
      std::array<std::unique_ptr<amrex::MultiFab>, 3> m_lumped_resistor_mf;
      std::array<std::unique_ptr<amrex::Parser>, 3> m_lumped_resistor_parser;
 
+     /** Per-edge capacitance [F]; zero disables the capacitor on that edge. */
+     std::array<std::unique_ptr<amrex::MultiFab>, 3> m_lumped_capacitor_mf;
+     std::array<std::unique_ptr<amrex::Parser>, 3> m_lumped_capacitor_parser;
+
      /** Gpu Vector with index type of coarsening ratio with default value (1,1,1) */
      amrex::GpuArray<int, 3> macro_cr_ratio;
      /** Initializes the Multifabs storing macroscopic properties

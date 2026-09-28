@@ -53,6 +53,17 @@ MacroscopicProperties::ReadParameters ()
         }
     }
 
+    if (WarpX::use_lumped_capacitor) {
+        const std::array<std::string, 3> directions = {"x", "y", "z"};
+        for (int comp = 0; comp < 3; ++comp) {
+            std::string expression;
+            utils::parser::Store_parserString(pp_macroscopic,
+                "lumped_capacitor_" + directions[comp] + "_function(x,y,z)", expression);
+            m_lumped_capacitor_parser[comp] = std::make_unique<amrex::Parser>(
+                utils::parser::makeParser(expression, {"x", "y", "z"}));
+        }
+    }
+
     // Query mask index
     pp_macroscopic.query("npy_k_index", m_npy_k_index);
     pp_macroscopic.query("npy_k_index2", m_npy_k_index2);
@@ -274,6 +285,21 @@ MacroscopicProperties::InitData ()
                 !resistance->contains_nan() && !resistance->contains_inf() &&
                 resistance->min(0) >= 0.,
                 "Lumped resistance must be finite and nonnegative; zero disables it.");
+        }
+    }
+
+    if (WarpX::use_lumped_capacitor) {
+        for (int comp = 0; comp < 3; ++comp) {
+            auto const staggering = warpx.get_pointer_current_fp(lev, comp)->ixType();
+            auto& capacitance = m_lumped_capacitor_mf[comp];
+            capacitance = std::make_unique<amrex::MultiFab>(
+                amrex::convert(ba, staggering), dmap, 1, ng_EB_alloc);
+            InitializeMacroMultiFabUsingParser(
+                capacitance.get(), m_lumped_capacitor_parser[comp]->compile<3>(), lev);
+            WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+                !capacitance->contains_nan() && !capacitance->contains_inf() &&
+                capacitance->min(0) >= 0.,
+                "Lumped capacitance must be finite and nonnegative; zero disables it.");
         }
     }
 

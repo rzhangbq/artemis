@@ -716,6 +716,9 @@ namespace
             MultiFab const* resistance_mf = WarpX::use_lumped_resistor
                 ? macroscopic_properties->m_lumped_resistor_mf[comp].get() : nullptr;
 
+            MultiFab const* capacitance_mf = WarpX::use_lumped_capacitor
+                ? macroscopic_properties->m_lumped_capacitor_mf[comp].get() : nullptr;
+
             // Fill only the valid region, then exchange ghosts below. Including the
             // grown tilebox here makes sample::Interp read sigma/epsilon outside their
             // fabs (staggering offset), which segfaults under OpenMP.
@@ -734,6 +737,11 @@ namespace
                     resistance_arr = resistance_mf->const_array(mfi);
                 }
                 bool const has_resistor = resistance_mf != nullptr;
+                Array4<Real const> capacitance_arr;
+                if (capacitance_mf != nullptr) {
+                    capacitance_arr = capacitance_mf->const_array(mfi);
+                }
+                bool const has_capacitor = capacitance_mf != nullptr;
                 Box const& bx = mfi.tilebox(Cb.ixType().toIntVect());
                 auto const& estag = *e_stag[comp];
                 Real const scale = kappa_scale[comp];
@@ -744,8 +752,11 @@ namespace
                 {
                     Real const sigma_bulk = ablastr::coarsen::sample::Interp(
                         sigma_arr, sigma_stag, estag, macro_cr, i, j, k, scomp);
-                    Real const eps = ablastr::coarsen::sample::Interp(
+                    Real const eps_bulk = ablastr::coarsen::sample::Interp(
                         eps_arr, epsilon_stag, estag, macro_cr, i, j, k, scomp);
+                    Real const C = has_capacitor ? capacitance_arr(i,j,k) : 0._rt;
+                    // J_C = C * edge_length / area * dE/dt adds edge permittivity.
+                    Real const eps = eps_bulk + scale * C;
                     Real const R = has_resistor ? resistance_arr(i,j,k) : 0._rt;
                     // Parallel edge conductance: J_R = E * edge_length / (R * area).
                     Real const sigma = sigma_bulk + ((R > 0._rt) ? scale / R : 0._rt);
@@ -1922,7 +1933,8 @@ namespace
                     Ey0, *Efield[1], *mat.kappa[1], c);
             step_jz(*warpx.get_pointer_current_fp(0, 2),
                     Ez0, *Efield[2], *mat.kappa[2], c);
-            warpx.FillBoundaryJ(warpx.getngEB());
+            // Particle-free runs can allocate fewer current than E/B guards.
+            warpx.FillBoundaryJ(warpx.get_pointer_current_fp(0, 0)->nGrowVect());
         }
 
         if (adi_pml_on()) {
@@ -2005,7 +2017,8 @@ namespace
                     Eyh, *Efield[1], *mat.kappa[1], c);
             step_jz(*warpx.get_pointer_current_fp(0, 2),
                     Ezh, *Efield[2], *mat.kappa[2], c);
-            warpx.FillBoundaryJ(warpx.getngEB());
+            // Particle-free runs can allocate fewer current than E/B guards.
+            warpx.FillBoundaryJ(warpx.get_pointer_current_fp(0, 0)->nGrowVect());
         }
 
         if (adi_pml_on()) {

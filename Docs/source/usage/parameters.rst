@@ -2036,6 +2036,51 @@ Two families of Maxwell solvers are implemented in WarpX, based on the Finite-Di
     computational medium, respectively. The default values are the corresponding values
     in vacuum.
 
+* ``warpx.use_lumped_capacitor`` (``0`` or ``1``, default ``0``)
+    Enable directional lumped capacitors for 3D macroscopic ADI
+    (``algo.em_solver_medium = macroscopic``, ``algo.time_stepping_scheme = adi``).
+    The input interface matches PR #152. When enabled, all three functions below
+    are required, including zero-valued functions for unused directions::
+
+        warpx.use_lumped_capacitor = 1
+        macroscopic.lumped_capacitor_x_function(x,y,z) = "0"
+        macroscopic.lumped_capacitor_y_function(x,y,z) = "0"
+        macroscopic.lumped_capacitor_z_function(x,y,z) = "1e-15"
+
+    Functions are evaluated at the corresponding electric/current edges. Values
+    are capacitance in farads per edge. Zero disables the capacitor on an edge;
+    negative or nonfinite capacitance is invalid. The example adds 1 fF to every
+    z edge. Use a spatial function to select a localized set of edges.
+
+    Each capacitor adds ``C * edge_length / transverse_area`` to the interpolated
+    bulk permittivity in both ADI stages, in parallel with the existing edge
+    capacitance. The bulk permittivity array is unchanged. No auxiliary capacitor
+    current is evolved. Each selected edge represents a separate capacitor;
+    selecting several edges does not define one capacitor spanning them.
+    Capacitors can be combined with the existing lumped resistors and inductors.
+
+* ``warpx.use_lumped_resistor`` (``0`` or ``1``, default ``0``)
+    Enable directional lumped resistors for 3D macroscopic ADI
+    (``algo.em_solver_medium = macroscopic``, ``algo.time_stepping_scheme = adi``).
+    The input interface matches PR #152. When enabled, all three functions below
+    are required, including zero-valued functions for unused directions::
+
+        warpx.use_lumped_resistor = 1
+        macroscopic.lumped_resistor_x_function(x,y,z) = "0"
+        macroscopic.lumped_resistor_y_function(x,y,z) = "0"
+        macroscopic.lumped_resistor_z_function(x,y,z) = "50"
+
+    Functions are evaluated directly at the corresponding electric/current edges.
+    Values are resistance in ohms per edge, not bulk resistivity. Zero disables
+    the resistor on an edge; negative or nonfinite resistance is invalid.
+    The example places a 50-ohm resistor on every z edge. Use a spatial function
+    to restrict the resistor to the desired edges.
+
+    Each resistor adds ``edge_length / (R * transverse_area)`` to the interpolated
+    bulk conductivity in both ADI stages. Bulk and lumped losses act in parallel;
+    specifying both for the same physical resistance double-counts that loss.
+    The bulk conductivity array itself is unchanged.
+
 * ``macroscopic.mag_Ms``, ``macroscopic.mag_alpha``, ``macroscopic.gamma`` (`double`)
     To initialize a constant saturation magnetization, Gilbert damping constant, and gyromagnetic ratio of the
     computational medium, respectively. The value of ``macroscopic.gamma`` for electron spins is -1.759e11 Coulomb/kg.
