@@ -2036,6 +2036,57 @@ Two families of Maxwell solvers are implemented in WarpX, based on the Finite-Di
     computational medium, respectively. The default values are the corresponding values
     in vacuum.
 
+* ``algo.use_josephson_junction`` (``0`` or ``1``, default ``0``)
+    Enable the nonlinear Josephson branch for single-level 3D macroscopic ADI.
+    The critical-current input names match PR #152::
+
+        algo.use_josephson_junction = 1
+        josephson.Ic_x_function(x,y,z) = "0"
+        josephson.Ic_y_function(x,y,z) = "0"
+        josephson.Ic_z_function(x,y,z) = "1e-6"
+
+    All three functions are required when enabled. They specify finite,
+    nonnegative critical currents in amperes per electric edge. Zero disables
+    the junction on that edge. This example places a separate 1-microampere
+    junction on every z edge; use a spatial function to localize the junction.
+    Match the lumped resistor and capacitor locations to form an RCSJ element.
+    The effective capacitance includes the bulk grid capacitance.
+
+    Each ADI half-step solves for the electric field and phase together with
+    centered phase evolution and endpoint-averaged supercurrent. A damped Newton
+    iteration reuses the tridiagonal solver, changing its diagonal locally.
+    Supercurrent is included in the electric solve, not deposited into the
+    persistent current array. No additional linear inductor is needed.
+
+    Phase is saved in checkpoint files ``Level_0/jj_phi_x``, ``jj_phi_y``, and
+    ``jj_phi_z``. Restarting an enabled junction requires these files and the
+    same material/junction inputs. Critical currents are reconstructed from
+    the inputs. Plot fields ``josephson_phi_x``, ``josephson_phi_y``,
+    ``josephson_phi_z`` and ``josephson_Ic_x``, ``josephson_Ic_y``,
+    ``josephson_Ic_z`` expose the phase and critical current.
+
+* ``josephson.initial_phase`` (``real``, default ``0``)
+    Initial phase difference in radians. This constant is applied to the phase
+    arrays at initialization; restart phase files supersede it.
+
+* ``josephson.newton_rtol`` (``real``, default ``1e-10``),
+  ``josephson.newton_atol`` (``real``, default ``1e-12``),
+  ``josephson.phase_tolerance`` (``real``, default ``1e-10``),
+  ``josephson.max_iterations`` (``integer``, default ``30``)
+    Positive nonlinear-solver controls. The residual is preconditioned by the
+    original ADI line operator and measured in V/m. Its infinity norm must be
+    below ``newton_atol + newton_rtol * max(norm(E_old), norm(E_trial))``;
+    its corresponding phase defect must also be below ``phase_tolerance`` in
+    radians. Line search halves the Newton step at most 15 times.
+
+    A failed nonlinear solve stops with a diagnostic. The implementation also
+    requires positive local Newton inverse-Cb coefficients to retain the
+    positive-definite structure needed by the unpivoted line solver. If this
+    condition or line search fails, reduce the timestep. Centering removes the
+    isolated linearized plasma stability limit, but does not guarantee accuracy
+    or nonlinear convergence at arbitrary timesteps. Endpoint averaging does
+    not conserve the nonlinear Josephson energy exactly.
+
 * ``warpx.use_lumped_capacitor`` (``0`` or ``1``, default ``0``)
     Enable directional lumped capacitors for 3D macroscopic ADI
     (``algo.em_solver_medium = macroscopic``, ``algo.time_stepping_scheme = adi``).

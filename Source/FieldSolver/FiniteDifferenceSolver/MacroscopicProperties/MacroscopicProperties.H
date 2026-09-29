@@ -56,6 +56,18 @@ public:
      std::array<std::unique_ptr<amrex::MultiFab>, 3> m_lumped_capacitor_mf;
      std::array<std::unique_ptr<amrex::Parser>, 3> m_lumped_capacitor_parser;
 
+     // Josephson critical current [A] and persistent edge phase [rad].
+     std::array<std::unique_ptr<amrex::MultiFab>, 3> m_jj_Ic;
+     std::array<std::unique_ptr<amrex::MultiFab>, 3> m_jj_phi;
+     std::array<std::unique_ptr<amrex::Parser>, 3> m_jj_Ic_parser;
+     amrex::Real m_jj_initial_phase = 0.;
+     amrex::Real m_jj_rtol = 1.e-10;
+     amrex::Real m_jj_atol = 1.e-12; // electric-field defect [V/m]
+     amrex::Real m_jj_phase_tol = 1.e-10; // phase defect [rad]
+     int m_jj_max_iterations = 30;
+     void WriteJosephsonCheckpoint (const std::string& dir) const;
+     void ReadJosephsonCheckpoint (const std::string& dir);
+
      /** Gpu Vector with index type of coarsening ratio with default value (1,1,1) */
      amrex::GpuArray<int, 3> macro_cr_ratio;
      /** Initializes the Multifabs storing macroscopic properties

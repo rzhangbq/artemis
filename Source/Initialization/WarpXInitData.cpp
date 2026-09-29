@@ -414,6 +414,9 @@ WarpX::InitData ()
         if (WarpX::em_solver_medium==1) {
             m_macroscopic_properties->InitData();
         }
+        if (use_josephson_junction) {
+            m_macroscopic_properties->ReadJosephsonCheckpoint(restart_chkfile);
+        }
         PostRestart();
         reduced_diags->InitData();
         multi_diags->InitData();

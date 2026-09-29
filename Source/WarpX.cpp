@@ -228,6 +228,7 @@ int WarpX::use_PEC_mask = 0;
 int WarpX::use_lumped_inductor = 0;
 int WarpX::use_lumped_resistor = 0;
 int WarpX::use_lumped_capacitor = 0;
+int WarpX::use_josephson_junction = 0;
 
 bool WarpX::do_current_centering = false;
 
@@ -1304,6 +1305,14 @@ WarpX::ReadParameters ()
             (macroscopic_time_integrator_algo == MacroscopicTimeSteppingScheme::ADI &&
              em_solver_medium == MediumForEM::Macroscopic && AMREX_SPACEDIM == 3),
             "warpx.use_lumped_capacitor requires 3D macroscopic ADI.");
+
+        pp_algo.query("use_josephson_junction", use_josephson_junction);
+        WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
+            !use_josephson_junction ||
+            (macroscopic_time_integrator_algo == MacroscopicTimeSteppingScheme::ADI &&
+             em_solver_medium == MediumForEM::Macroscopic && AMREX_SPACEDIM == 3 &&
+             maxLevel() == 0),
+            "algo.use_josephson_junction requires single-level 3D macroscopic ADI.");
 
         // Load balancing parameters
         std::vector<std::string> load_balance_intervals_string_vec = {"0"};

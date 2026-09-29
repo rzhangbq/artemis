@@ -18,6 +18,7 @@
 #include <AMReX_MultiFab.H>
 #include <AMReX_REAL.H>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <memory>
@@ -28,6 +29,41 @@ namespace
 {
     using FieldArray = std::array<std::unique_ptr<MultiFab>, 3>;
     using AdiFieldArray = std::array<FieldArray, 3>;
+
+    // Host-side tally of Newton corrections in the current ADI step.
+    // Each recorded entry is one electric component on one half-step.
+    struct JosephsonNewtonLog
+    {
+        int half = 0;
+        int n = 0;
+        int comp[6] = {};
+        int half_id[6] = {};
+        int iters[6] = {};
+
+        void reset () { half = 0; n = 0; }
+        void begin_half () { ++half; }
+        void record (int component, int corrections)
+        {
+            if (n >= 6) { return; }
+            comp[n] = component;
+            half_id[n] = half;
+            iters[n] = corrections;
+            ++n;
+        }
+        void print () const
+        {
+            int mx = 0;
+            for (int i = 0; i < n; ++i) { mx = std::max(mx, iters[i]); }
+            amrex::Print() << "JJ_NEWTON " << mx;
+            for (int i = 0; i < n; ++i) {
+                amrex::Print() << " " << "xyz"[comp[i]] << half_id[i]
+                               << "=" << iters[i];
+            }
+            amrex::Print() << "\n";
+        }
+    };
+
+    JosephsonNewtonLog josephson_newton_log;
 
     struct AdiCoeffs
     {
@@ -1438,6 +1474,149 @@ namespace
         return rhs;
     }
 
+    // Nonlinear centered Josephson solve on an existing ADI pencil layout.
+    // A E + jbar(E) = rhs, with phi(E) = phi_old + dt*eta/4*(E_old+E).
+    // A is unchanged; Newton changes only its diagonal. The residual is measured
+    // as A^{-1}(A E + jbar - rhs), in V/m, using the same boundary-aware solve.
+    void solve_josephson_component (
+        MultiFab& field, MultiFab const& rhs, MultiFab const& Cb, MultiFab const& Db,
+        int e_comp, int solve_dir, Real inv_d2, PecConfig const& pec,
+        MultiFab const* pec_mask, MultiFab const* stretch_e, MultiFab const* stretch_h,
+        Real dt, Periodicity const& periodicity)
+    {
+        auto linear_solve = [&](MultiFab& out, MultiFab const& source, MultiFab const& cb) {
+            solve_implicit_component(out, source, cb, Db, e_comp, solve_dir,
+                                     inv_d2, pec, pec_mask, stretch_e, stretch_h);
+        };
+        if (!WarpX::use_josephson_junction) {
+            linear_solve(field, rhs, Cb);
+            return;
+        }
+        auto& warpx = WarpX::GetInstance();
+        auto& macro = warpx.GetMacroscopicProperties();
+        MultiFab old_e = make_rhs(field);
+        MultiFab old_phi = make_rhs(field);
+        MultiFab jc = make_rhs(field);
+        MultiFab source = make_rhs(field);
+        MultiFab cb_newton = make_rhs(field);
+        MultiFab candidate = make_rhs(field);
+        MultiFab trial = make_rhs(field);
+        MultiFab defect = make_rhs(field);
+        MultiFab mapped = make_rhs(field);
+        MultiFab::Copy(old_e, field, 0, 0, 1, 0);
+        copy_coeff_to_layout(old_phi, *macro.m_jj_phi[e_comp], periodicity);
+        copy_coeff_to_layout(jc, *macro.m_jj_Ic[e_comp], periodicity);
+        auto const dx = warpx.Geom(0).CellSizeArray();
+        Real const length = dx[e_comp];
+        Real const area = dx[(e_comp+1)%3] * dx[(e_comp+2)%3];
+        Real const phase_factor = dt * 0.5_rt * PhysConst::q_e / PhysConst::hbar * length;
+        jc.mult(1._rt / area, 0, 1, 0);
+        if (jc.norm0(0) == 0._rt) {
+            linear_solve(field, rhs, Cb);
+            return;
+        }
+
+        // Assemble the predictor (mode 0), lagged nonlinear RHS (mode 1),
+        // or Newton absolute-iterate equation (mode 2).
+        auto assemble = [&](MultiFab const& iterate, int mode) {
+            for (MFIter mfi(source); mfi.isValid(); ++mfi) {
+                auto const r = rhs.const_array(mfi);
+                auto const e = iterate.const_array(mfi);
+                auto const e0 = old_e.const_array(mfi);
+                auto const p0 = old_phi.const_array(mfi);
+                auto const j = jc.const_array(mfi);
+                auto const cb = Cb.const_array(mfi);
+                auto const out = source.array(mfi);
+                auto const cn = cb_newton.array(mfi);
+                Array4<Real const> mask;
+                if (pec_mask) { mask = pec_mask->const_array(mfi); }
+                bool const masked = pec_mask != nullptr;
+                ParallelFor(mfi.validbox(), [=] AMREX_GPU_DEVICE (int i, int jj, int k) noexcept {
+                    Real const critical = (masked && mask(i,jj,k) == 0._rt) ? 0._rt : j(i,jj,k);
+                    Real const phase = p0(i,jj,k) + phase_factor * (e0(i,jj,k) + e(i,jj,k));
+                    Real const current = mode == 0 ? critical * std::sin(p0(i,jj,k))
+                        : 0.5_rt * critical * (std::sin(p0(i,jj,k)) + std::sin(phase));
+                    Real const derivative = mode == 2
+                        ? 0.5_rt * critical * phase_factor * std::cos(phase) : 0._rt;
+                    Real const diagonal = 1._rt / cb(i,jj,k) + derivative;
+                    // Preserve positive definiteness for the unpivoted line solver.
+                    // This is a conservative robustness condition, not a CFL proof.
+                    cn(i,jj,k) = diagonal;
+                    out(i,jj,k) = r(i,jj,k) - current + derivative * e(i,jj,k);
+                });
+            }
+            WARPX_ALWAYS_ASSERT_WITH_MESSAGE(!source.contains_nan() && !source.contains_inf() &&
+                !cb_newton.contains_nan() && !cb_newton.contains_inf() && cb_newton.min(0) > 0._rt,
+                "Josephson Newton diagonal is nonpositive or nonfinite; reduce warpx.const_dt.");
+            cb_newton.invert(1._rt, 0, 1, 0);
+        };
+        auto residual = [&](MultiFab const& iterate) {
+            assemble(iterate, 1);
+            linear_solve(mapped, source, Cb);
+            MultiFab::LinComb(defect, 1._rt, iterate, 0, -1._rt, mapped, 0, 0, 1, 0);
+            WARPX_ALWAYS_ASSERT_WITH_MESSAGE(!defect.contains_nan() && !defect.contains_inf(),
+                "Nonfinite Josephson nonlinear residual; reduce warpx.const_dt.");
+            return defect.norm0(0);
+        };
+        assemble(old_e, 0);
+        linear_solve(field, source, Cb);
+        Real error = residual(field);
+        bool converged = false;
+        int newton_iterations = 0;
+        for (int iteration = 0; iteration <= macro.m_jj_max_iterations; ++iteration) {
+            Real const tolerance = macro.m_jj_atol + macro.m_jj_rtol *
+                std::max(old_e.norm0(0), field.norm0(0));
+            if (error <= tolerance && std::abs(phase_factor)*error <= macro.m_jj_phase_tol) {
+                converged = true;
+                newton_iterations = iteration;
+                break;
+            }
+            if (iteration == macro.m_jj_max_iterations) {
+                newton_iterations = iteration;
+                break;
+            }
+            assemble(field, 2);
+            linear_solve(candidate, source, cb_newton);
+            bool accepted = false;
+            Real damping = 1._rt;
+            for (int backtrack = 0; backtrack < 16; ++backtrack) {
+                MultiFab::LinComb(trial, 1._rt-damping, field, 0,
+                                 damping, candidate, 0, 0, 1, 0);
+                Real const trial_error = residual(trial);
+                if (trial_error < error ||
+                    (trial_error <= tolerance &&
+                     std::abs(phase_factor)*trial_error <= macro.m_jj_phase_tol)) {
+                    MultiFab::Copy(field, trial, 0, 0, 1, 0);
+                    error = trial_error;
+                    accepted = true;
+                    break;
+                }
+                damping *= 0.5_rt;
+            }
+            WARPX_ALWAYS_ASSERT_WITH_MESSAGE(accepted,
+                "Josephson Newton line search failed; reduce warpx.const_dt.");
+        }
+        josephson_newton_log.record(e_comp, newton_iterations);
+        WARPX_ALWAYS_ASSERT_WITH_MESSAGE(converged,
+            "Josephson Newton failed to converge; reduce warpx.const_dt or increase josephson.max_iterations.");
+
+        // Commit phase once, from the saved half-step state. Do not deposit Js
+        // into persistent J: the centered supercurrent was included in the solve.
+        for (MFIter mfi(old_phi); mfi.isValid(); ++mfi) {
+            auto const p = old_phi.array(mfi);
+            auto const e = field.const_array(mfi);
+            auto const e0 = old_e.const_array(mfi);
+            auto const j = jc.const_array(mfi);
+            ParallelFor(mfi.validbox(), [=] AMREX_GPU_DEVICE (int i, int jj, int k) noexcept {
+                if (j(i,jj,k) != 0._rt) {
+                    p(i,jj,k) += phase_factor * (e0(i,jj,k) + e(i,jj,k));
+                }
+            });
+        }
+        macro.m_jj_phi[e_comp]->ParallelCopy(old_phi, 0, 0, 1, IntVect(0), IntVect(0), periodicity);
+        macro.m_jj_phi[e_comp]->FillBoundaryAndSync(periodicity);
+    }
+
     void solve_implicit_ex1 (MultiFab& ex, MultiFab const& rhs,
                              AdiCoeffs const& c, AdiMaterialCoeffs const& mat,
                              Periodicity const& periodicity, PecConfig const& pec,
@@ -1459,9 +1638,9 @@ namespace
             stretch_e = &stretch_e_mf;
             stretch_h = &stretch_h_mf;
         }
-        solve_implicit_component(ex, rhs, Cb, Db,
+        solve_josephson_component(ex, rhs, Cb, Db,
                                  0, 1, c.inv_dy * c.inv_dy, pec, pec_mask,
-                                 stretch_e, stretch_h);
+                                 stretch_e, stretch_h, c.dt, periodicity);
     }
 
     void solve_implicit_ey1 (MultiFab& ey, MultiFab const& rhs,
@@ -1485,9 +1664,9 @@ namespace
             stretch_e = &stretch_e_mf;
             stretch_h = &stretch_h_mf;
         }
-        solve_implicit_component(ey, rhs, Cb, Db,
+        solve_josephson_component(ey, rhs, Cb, Db,
                                  1, 2, c.inv_dz * c.inv_dz, pec, pec_mask,
-                                 stretch_e, stretch_h);
+                                 stretch_e, stretch_h, c.dt, periodicity);
     }
 
     void solve_implicit_ez1 (MultiFab& ez, MultiFab const& rhs,
@@ -1511,9 +1690,9 @@ namespace
             stretch_e = &stretch_e_mf;
             stretch_h = &stretch_h_mf;
         }
-        solve_implicit_component(ez, rhs, Cb, Db,
+        solve_josephson_component(ez, rhs, Cb, Db,
                                  2, 0, c.inv_dx * c.inv_dx, pec, pec_mask,
-                                 stretch_e, stretch_h);
+                                 stretch_e, stretch_h, c.dt, periodicity);
     }
 
     void solve_implicit_ex2 (MultiFab& ex, MultiFab const& rhs,
@@ -1537,9 +1716,9 @@ namespace
             stretch_e = &stretch_e_mf;
             stretch_h = &stretch_h_mf;
         }
-        solve_implicit_component(ex, rhs, Cb, Db,
+        solve_josephson_component(ex, rhs, Cb, Db,
                                  0, 2, c.inv_dz * c.inv_dz, pec, pec_mask,
-                                 stretch_e, stretch_h);
+                                 stretch_e, stretch_h, c.dt, periodicity);
     }
 
     void solve_implicit_ey2 (MultiFab& ey, MultiFab const& rhs,
@@ -1563,9 +1742,9 @@ namespace
             stretch_e = &stretch_e_mf;
             stretch_h = &stretch_h_mf;
         }
-        solve_implicit_component(ey, rhs, Cb, Db,
+        solve_josephson_component(ey, rhs, Cb, Db,
                                  1, 0, c.inv_dx * c.inv_dx, pec, pec_mask,
-                                 stretch_e, stretch_h);
+                                 stretch_e, stretch_h, c.dt, periodicity);
     }
 
     void solve_implicit_ez2 (MultiFab& ez, MultiFab const& rhs,
@@ -1589,9 +1768,9 @@ namespace
             stretch_e = &stretch_e_mf;
             stretch_h = &stretch_h_mf;
         }
-        solve_implicit_component(ez, rhs, Cb, Db,
+        solve_josephson_component(ez, rhs, Cb, Db,
                                  2, 1, c.inv_dy * c.inv_dy, pec, pec_mask,
-                                 stretch_e, stretch_h);
+                                 stretch_e, stretch_h, c.dt, periodicity);
     }
 
     void step_jx (MultiFab& jx, MultiFab const& ex_old, MultiFab const& ex_new,
@@ -1883,6 +2062,7 @@ namespace
         PecConfig const& pec,
         AdiFieldArray const& pec_masks)
     {
+        josephson_newton_log.begin_half();
         // Implicit E along y,z,x; explicit B at n+1/2.
         MultiFab Ex0 = make_copy(*Efield[0]);
         MultiFab Ey0 = make_copy(*Efield[1]);
@@ -1967,6 +2147,7 @@ namespace
         PecConfig const& pec,
         AdiFieldArray const& pec_masks)
     {
+        josephson_newton_log.begin_half();
         // Implicit E along z,x,y; explicit B at n+1.
         MultiFab Exh = make_copy(*Efield[0]);
         MultiFab Eyh = make_copy(*Efield[1]);
@@ -2091,6 +2272,9 @@ FiniteDifferenceSolver::MacroscopicEvolveADI (
     update_material_coeffs(mat, Bfield, dt, periodicity, macroscopic_properties);
 
     WarpX& warpx = WarpX::GetInstance();
+    if (WarpX::use_josephson_junction) {
+        josephson_newton_log.reset();
+    }
 
     adi_first_half_step(
         Efield, Bfield, Efield_adi, Bfield_adi, c, mat, periodicity, pec, PEC_adi);
@@ -2107,5 +2291,8 @@ FiniteDifferenceSolver::MacroscopicEvolveADI (
 
     warpx.FillBoundaryE(warpx.getngEB());
     warpx.FillBoundaryB(warpx.getngEB());
+    if (WarpX::use_josephson_junction) {
+        josephson_newton_log.print();
+    }
 #endif
 }
