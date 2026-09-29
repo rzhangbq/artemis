@@ -2053,8 +2053,8 @@ Two families of Maxwell solvers are implemented in WarpX, based on the Finite-Di
     The effective capacitance includes the bulk grid capacitance.
 
     Each ADI half-step solves for the electric field and phase together with
-    centered phase evolution and endpoint-averaged supercurrent. A damped Newton
-    iteration reuses the tridiagonal solver, changing its diagonal locally.
+    centered phase evolution and endpoint-averaged supercurrent. Newton iteration
+    reuses the tridiagonal solver, changing its diagonal locally.
     Supercurrent is included in the electric solve, not deposited into the
     persistent current array. No additional linear inductor is needed.
 
@@ -2071,18 +2071,16 @@ Two families of Maxwell solvers are implemented in WarpX, based on the Finite-Di
 
 * ``josephson.newton_rtol`` (``real``, default ``1e-10``),
   ``josephson.newton_atol`` (``real``, default ``1e-12``),
-  ``josephson.phase_tolerance`` (``real``, default ``1e-10``),
   ``josephson.max_iterations`` (``integer``, default ``30``)
-    Positive nonlinear-solver controls. The residual is preconditioned by the
-    original ADI line operator and measured in V/m. Its infinity norm must be
-    below ``newton_atol + newton_rtol * max(norm(E_old), norm(E_trial))``;
-    its corresponding phase defect must also be below ``phase_tolerance`` in
-    radians. Line search halves the Newton step at most 15 times.
+    Positive nonlinear-solver controls. Each iteration solves
+    ``(A + J_J) ΔE = -F`` and takes the full step ``E := E + ΔE``.
+    The infinity norm of ``ΔE``, in V/m, must be below
+    ``newton_atol + newton_rtol * max(norm(E_old), norm(E))``.
 
     A failed nonlinear solve stops with a diagnostic. The implementation also
     requires positive local Newton inverse-Cb coefficients to retain the
     positive-definite structure needed by the unpivoted line solver. If this
-    condition or line search fails, reduce the timestep. Centering removes the
+    condition fails, reduce the timestep. Centering removes the
     isolated linearized plasma stability limit, but does not guarantee accuracy
     or nonlinear convergence at arbitrary timesteps. Endpoint averaging does
     not conserve the nonlinear Josephson energy exactly.

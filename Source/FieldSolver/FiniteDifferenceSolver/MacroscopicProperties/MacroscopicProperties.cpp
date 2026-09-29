@@ -80,12 +80,11 @@ MacroscopicProperties::ReadParameters ()
         utils::parser::queryWithParser(pp_jj, "initial_phase", m_jj_initial_phase);
         pp_jj.query("newton_rtol", m_jj_rtol);
         pp_jj.query("newton_atol", m_jj_atol);
-        pp_jj.query("phase_tolerance", m_jj_phase_tol);
         pp_jj.query("max_iterations", m_jj_max_iterations);
         WARPX_ALWAYS_ASSERT_WITH_MESSAGE(
             std::isfinite(m_jj_initial_phase) && std::isfinite(m_jj_rtol) &&
-            std::isfinite(m_jj_atol) && std::isfinite(m_jj_phase_tol) &&
-            m_jj_rtol > 0. && m_jj_atol > 0. && m_jj_phase_tol > 0. &&
+            std::isfinite(m_jj_atol) &&
+            m_jj_rtol > 0. && m_jj_atol > 0. &&
             m_jj_max_iterations > 0,
             "Josephson phase must be finite; nonlinear tolerances and iteration limit must be positive.");
     }

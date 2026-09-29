@@ -66,7 +66,7 @@ def run(name, axis=0, dt=1e-11, steps=32, phase=1., omega=OMEGA,
     text += f'macroscopic.epsilon = {EPS:.17g}\nmacroscopic.sigma = {sigma:.17g}\n'
     if enabled:
         text += f'algo.use_josephson_junction = 1\njosephson.initial_phase = {phase:.17g}\n'
-        text += 'josephson.newton_rtol = 1e-12\njosephson.newton_atol = 1e-15\njosephson.phase_tolerance = 1e-12\n'
+        text += 'josephson.newton_rtol = 1e-12\njosephson.newton_atol = 1e-15\n'
         for i, a in enumerate('xyz'):
             text += f'josephson.Ic_{a}_function(x,y,z) = "{ic if i == axis else 0:.17g}"\n'
     for i, a in enumerate('xyz'):
@@ -102,28 +102,10 @@ plot.fields_to_plot = Ex Ey Ez josephson_phi_x josephson_phi_y josephson_phi_z j
         assert result.returncode != 0 and fail in result.stdout, result.stdout[-4000:]
         return None
     assert result.returncode == 0, f'{folder}:\n{result.stdout[-5000:]}'
-    report_newton(name, result.stdout)
     rows = [[float(v) for v in line.split()] for line in
             (folder/'diags/probe.txt').read_text().splitlines()
             if line.strip() and not line.startswith('#')]
     return rows
-
-
-def report_newton(name, stdout):
-    """Print Newton corrections for each ADI step.
-
-    A step line is 'JJ_NEWTON <max> <comp><half>=<count> ...'.
-    The max is over the component solves that ran Newton; a zero-Ic step is 'JJ_NEWTON 0'.
-    """
-    step = 0
-    for line in stdout.splitlines():
-        if not line.startswith('JJ_NEWTON '):
-            continue
-        step += 1
-        parts = line.split()
-        detail = ' '.join(parts[2:])
-        suffix = f' ({detail})' if detail else ''
-        print(f'{name} step {step}: newton {parts[1]}{suffix}', flush=True)
 
 
 def reference(phase, time, damping=0.):
