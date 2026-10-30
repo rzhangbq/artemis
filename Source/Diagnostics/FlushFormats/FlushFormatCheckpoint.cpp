@@ -19,6 +19,8 @@
 #include <AMReX_Utility.H>
 #include <AMReX_VisMF.H>
 
+#include <string>
+
 using namespace amrex;
 
 namespace
@@ -203,6 +205,19 @@ FlushFormatCheckpoint::WriteToFile (
                     amrex::MultiFabFileFullPrefix(lev, checkpointname, default_level_prefix, "pml_rz"));
             }
 #endif
+        }
+
+        // The macroscopic ADI CFS-PML keeps its convolution memory outside pml[lev]
+        // (do_pml = 0), so save it here; it is single-level.
+        if (lev == 0 && warpx.AdiPmlOn()) {
+            for (int idx = 0; idx < 6; ++idx) {
+                VisMF::Write(warpx.get_adi_psi_e(idx),
+                             amrex::MultiFabFileFullPrefix(lev, checkpointname, default_level_prefix,
+                                                           "adi_psi_e" + std::to_string(idx)));
+                VisMF::Write(warpx.get_adi_psi_h(idx),
+                             amrex::MultiFabFileFullPrefix(lev, checkpointname, default_level_prefix,
+                                                           "adi_psi_h" + std::to_string(idx)));
+            }
         }
     }
 

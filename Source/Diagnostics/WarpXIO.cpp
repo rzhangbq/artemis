@@ -19,6 +19,7 @@
 #include "Diagnostics/MultiDiagnostics.H"
 
 #include <ablastr/utils/Communication.H>
+#include <ablastr/warn_manager/WarnManager.H>
 
 #ifdef AMREX_USE_SENSEI_INSITU
 #   include <AMReX_AmrMeshInSituBridge.H>
@@ -447,6 +448,33 @@ WarpX::InitFromCheckpoint ()
             if (pml_rz[lev])
                 pml_rz[lev]->Restart(amrex::MultiFabFileFullPrefix(lev, restart_chkfile, level_prefix, "pml_rz"));
 #endif
+        }
+    }
+
+    // InitPML() just allocated the ADI CFS-PML auxiliary fields and set them to zero.
+    // The code below loads the values saved in the checkpoint.
+    // If the checkpoint does not contain the auxiliary fields, the fields stay at zero
+    // and a warning is issued.
+    if (adi_pml)
+    {
+        bool missing = false;
+        for (int idx = 0; idx < 6; ++idx) {
+            std::string const e_name = amrex::MultiFabFileFullPrefix(
+                0, restart_chkfile, level_prefix, "adi_psi_e" + std::to_string(idx));
+            std::string const h_name = amrex::MultiFabFileFullPrefix(
+                0, restart_chkfile, level_prefix, "adi_psi_h" + std::to_string(idx));
+            if (VisMF::Exist(e_name) && VisMF::Exist(h_name)) {
+                VisMF::Read(*adi_psi_e[idx], e_name);
+                VisMF::Read(*adi_psi_h[idx], h_name);
+            } else {
+                missing = true;
+            }
+        }
+        if (missing) {
+            ablastr::warn_manager::WMRecordWarning("ADI PML",
+                "checkpoint has no ADI CFS-PML auxiliary fields (adi_psi_*); "
+                "restarting it from zero, which can cause a small reflection at the PML.",
+                ablastr::warn_manager::WarnPriority::low);
         }
     }
 
