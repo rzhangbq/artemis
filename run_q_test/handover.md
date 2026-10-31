@@ -2,31 +2,29 @@
 
 Written Sat 2026-10-31 12:27 PDT. Times below are PDT.
 
-## Immediate state: two tests are running
+## Immediate state: tests C and D finished, nothing is running
 
-| test | job / node | case | PML change | restart from | ends at step | expected finish |
-|---|---|---|---|---|---|---|
-| C | 60616457, nid200444, 4 GPUs | cfl 16, 225 um air | alpha_max = 0.2 and pml_R = 1e-4 | `air225_pmltest_cfl16_alpha0p2/60616457/diags/chk0076000` (6.18 ns) | 92000 (7.48 ns) | ~13:37 |
-| D | 60616463, nid200277, 1 GPU | cfl 32, 225 um air | alpha_max = 1.0 (R = 1e-8) | `closerctrlline_cut_pmlall_cfl32_air225/60596002/diags/chk0024000` (3.90 ns) | 30000 (4.88 ns) | ~13:40 |
+Updated 2026-10-31 13:41 PDT. Both Jupyter sessions (60616457, 60616463) end about 14:02 and are idle.
 
-Both Jupyter sessions end about 14:02. Stopping the Jupyter server kills the run (this already cut one test short).
+| test | case | PML change | restart from | ended at | window fitted |
+|---|---|---|---|---|---|
+| C | cfl 16, 225 um air | alpha_max = 0.2 and pml_R = 1e-4 | `air225_pmltest_cfl16_alpha0p2/60616457/diags/chk0076000` (6.18 ns) | step 92000 (7.48 ns) | 6.70-7.48 ns |
+| D | cfl 32, 225 um air | alpha_max = 1.0 (R = 1e-8) | `closerctrlline_cut_pmlall_cfl32_air225/60596002/diags/chk0024000` (3.90 ns) | step 30000 (4.88 ns) | 4.40-4.88 ns |
 
 Output, under `/pscratch/sd/r/rzhangbq/`:
 - C: `air225_pmltest_cfl16_alpha0p2_R1e-4/60616457/`
 - D: `air225_pmltest_cfl32_alpha1p0/60616463/`
 
-### First thing to do when they finish
-Fit the rates, skipping about 0.5 ns after each restart:
+Refit with:
 
-    P=/pscratch/sd/r/rzhangbq
-    python3 $P/cfl_study/rates.py "C" $P/air225_pmltest_cfl16_alpha0p2_R1e-4/60616457 6.7
-    python3 $P/cfl_study/rates.py "D" $P/air225_pmltest_cfl32_alpha1p0/60616463 4.4
+    python3 /pscratch/sd/r/rzhangbq/cfl_study/rates.py "C" /pscratch/sd/r/rzhangbq/air225_pmltest_cfl16_alpha0p2_R1e-4/60616457 6.7
+    python3 /pscratch/sd/r/rzhangbq/cfl_study/rates.py "D" /pscratch/sd/r/rzhangbq/air225_pmltest_cfl32_alpha1p0/60616463 4.4
 
-`rates.py` prints the frequency of the last component (Ez), which is unreliable when Ez is small. Use Ex for frequency.
+`rates.py` prints the frequency of the last component (Ez), which is wrong when Ez is small (it printed 26.65 GHz for D). Use Ex zero crossings for frequency.
 
-Reading the result:
-- Rate at or below zero: that setting stops the growth. It is a real radiation loss only if a stronger setting gives the same rate.
-- Still small and positive: the PML still adds energy. Next look at PML thickness, `warpx.pml_kappa_max`, and the ADI-PML update itself.
+Result: the growth is gone in both, but the rate still follows the PML setting, so neither is a radiation Q.
+- C: Ex -0.72, Ey -0.76, Ez -0.92 %/ns. The components agree. Decay, equivalent Q about 2,500, over only 0.78 ns.
+- D: Ex +0.29, Ey +1.37, Ez +7.24 %/ns. The components disagree and the window is only 0.48 ns (2.7 cycles), and Ex changed by only 0.1 %. Read this as about zero, with roughly +/-1 %/ns uncertainty; Ez is too small to use.
 
 ## Main finding: the z-PML makes the resonator grow
 
@@ -44,12 +42,15 @@ Eobs1 amplitude rate during free ring-down. Nothing in the model dissipates, so 
 | PML | 225 um | 32 | default | **+7.39** | -239 | 5.614 |
 | PML | 225 um | 16 | alpha = 0.2 | +1.80 | -1000 | 5.721 |
 | PML | 225 um | 32 | R = 1e-4 | +1.04 | -1690 | 5.595 |
+| PML | 225 um | 16 | alpha = 0.2, R = 1e-4 | -0.72 | ~2500 | 5.723 |
+| PML | 225 um | 32 | alpha = 1.0 | ~0 (+0.29, short window) | not measurable | 5.61 |
 
 Default PML: R = 1e-8, kappa_max = 1, alpha_max = 0, m = 3, 10 cells.
 
 Conclusions:
 - The 225 um growth is a numerical instability, not energy transfer. It is one exponentially growing mode: the same rate in all components, fixed frequency, and U_E/Ex^2 constant over the domain, so there is no other energy reservoir. The drive is off by then.
-- The PML is the source, or at least a major part: changing only PML parameters cut the rate 5-7x. It is not eliminated yet.
+- The PML is the source: changing only PML parameters took the rate from +7 to +9 %/ns down to zero or slightly negative. The default PML settings are what make it grow.
+- The rate is not converged in PML parameters. At cfl 16, adding R = 1e-4 to alpha = 0.2 moved it by -2.5 %/ns, so the rate is still set by the PML rather than by physics.
 - **No all-PML Q is a trustworthy radiation Q yet, including Q = 504 at 75 um.**
 - Rates look additive: more air gives about +12.3 %/ns at both cfl values; cfl 16 to 32 gives about -1.4 %/ns at both air thicknesses. This rests on four numbers only.
 - **Do not run the 8-qubit chip with the default PML.** It would use the same 225 um of air.
@@ -65,7 +66,7 @@ Other observations:
 - Chain of 26 junctions: split onset when a junction phase passes about 1.5 rad (from `run_jj_test`).
 
 ## Open next steps
-1. Read tests C and D.
+1. Sweep alpha at one fixed cfl (16) and R, restarting from a psi checkpoint: alpha = 0.2, 0.5, 1.0, 2.0, with at least 1.5 ns fitted after a 0.5 ns skip. That is about 18,000 steps per point, or 1.4 h on 4 GPUs. C and D were too short to separate small rates.
 2. Find a PML setting where the rate stops changing as the PML is strengthened. Only that rate is real radiation loss.
 3. Then repeat the air-thickness test (225, 450 um) at one fixed cfl with that setting. 450 um needs about 7.8 h on 4 GPUs at cfl 16, so it spans two sessions via checkpoints.
 4. Identify which z wall matters: PEC on one z wall, PML on the other. This changes the domain size, so it must start from t = 0.
