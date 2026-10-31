@@ -66,7 +66,7 @@ Other observations:
 - Chain of 26 junctions: split onset when a junction phase passes about 1.5 rad (from `run_jj_test`).
 
 ## Open next steps
-1. Sweep alpha at one fixed cfl (16) and R, restarting from a psi checkpoint: alpha = 0.2, 0.5, 1.0, 2.0, with at least 1.5 ns fitted after a 0.5 ns skip. That is about 18,000 steps per point, or 1.4 h on 4 GPUs. C and D were too short to separate small rates.
+1. Sweep alpha at one fixed cfl (16) and R, restarting from a psi checkpoint: alpha = 0.2, 0.5, 1.0, 2.0, with at least 1.5 ns fitted after a 0.5 ns skip. That is 2 ns, about 24,600 steps per point, or 1.85 h on 4 GPUs. C and D were too short to separate small rates.
 2. Find a PML setting where the rate stops changing as the PML is strengthened. Only that rate is real radiation loss.
 3. Then repeat the air-thickness test (225, 450 um) at one fixed cfl with that setting. 450 um needs about 7.8 h on 4 GPUs at cfl 16, so it spans two sessions via checkpoints.
 4. Identify which z wall matters: PEC on one z wall, PML on the other. This changes the domain size, so it must start from t = 0.
