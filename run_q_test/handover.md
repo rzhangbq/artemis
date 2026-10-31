@@ -22,9 +22,17 @@ Refit with:
 
 `rates.py` prints the frequency of the last component (Ez), which is wrong when Ez is small (it printed 26.65 GHz for D). Use Ex zero crossings for frequency.
 
+`rates.py` works from sampled peaks and is too coarse for rates below about 1 %/ns. Use the whole-window fit instead, `cfl_study/ringfit.py LABEL RUN T0 T1`, which fits a growing or decaying sinusoid and also reports each half of the window. It reproduces A (+1.80) and B (+1.04).
+
 Result: the growth is gone in both, but the rate still follows the PML setting, so neither is a radiation Q.
-- C: Ex -0.72, Ey -0.76, Ez -0.92 %/ns. The components agree. Decay, equivalent Q about 2,500, over only 0.78 ns.
-- D: Ex +0.29, Ey +1.37, Ez +7.24 %/ns. The components disagree and the window is only 0.48 ns (2.7 cycles), and Ex changed by only 0.1 %. Read this as about zero, with roughly +/-1 %/ns uncertainty; Ez is too small to use.
+- C (6.50-7.48 ns): Ex -0.732, Ey -0.735, Ez -0.729 %/ns, f = 5.7226 GHz. All components agree, and the Ex halves agree (-0.734, -0.734). Decay, equivalent Q about 2,450.
+- D (4.20-4.88 ns): Ex +0.074, Ey +0.070 %/ns, f = 5.6049 GHz. Ex halves +0.077, +0.076. Ez is not usable (halves -0.45, +0.44) because of the line below. Essentially zero, still slightly positive, over only 0.68 ns.
+
+High-frequency line in D (`cfl_study/sliding.py`; use it for the high-frequency line only, its 0.25 ns window is too short for the mode):
+- A 71.0 GHz line appears at the restart with alpha = 1.0. In Eobs1 Ez it is about 5.5e-6 V/m, about 10 % of the mode in that component; in Ey under 1 %; in Ex under 0.1 %.
+- It is at least 50x above the pre-restart level in Ez and is not growing: -2.7 %/ns in Ez and Ey, about 0 in Ex, over 0.68 ns.
+- C and A have a smaller 92 GHz line, also decaying (about -6 %/ns), about 0.15 % of the Ez mode in C.
+- Cause not established. Changing PML parameters at a restart may kick it, so a run from t = 0 with the same setting would tell.
 
 ## Main finding: the z-PML makes the resonator grow
 
@@ -42,8 +50,8 @@ Eobs1 amplitude rate during free ring-down. Nothing in the model dissipates, so 
 | PML | 225 um | 32 | default | **+7.39** | -239 | 5.614 |
 | PML | 225 um | 16 | alpha = 0.2 | +1.80 | -1000 | 5.721 |
 | PML | 225 um | 32 | R = 1e-4 | +1.04 | -1690 | 5.595 |
-| PML | 225 um | 16 | alpha = 0.2, R = 1e-4 | -0.72 | ~2500 | 5.723 |
-| PML | 225 um | 32 | alpha = 1.0 | ~0 (+0.29, short window) | not measurable | 5.61 |
+| PML | 225 um | 16 | alpha = 0.2, R = 1e-4 | -0.73 | ~2450 | 5.723 |
+| PML | 225 um | 32 | alpha = 1.0 | +0.07 (0.68 ns window) | not measurable | 5.605 |
 
 Default PML: R = 1e-8, kappa_max = 1, alpha_max = 0, m = 3, 10 cells.
 
@@ -66,7 +74,7 @@ Other observations:
 - Chain of 26 junctions: split onset when a junction phase passes about 1.5 rad (from `run_jj_test`).
 
 ## Open next steps
-1. Sweep alpha at one fixed cfl (16) and R, restarting from a psi checkpoint: alpha = 0.2, 0.5, 1.0, 2.0, with at least 1.5 ns fitted after a 0.5 ns skip. That is 2 ns, about 24,600 steps per point, or 1.85 h on 4 GPUs. C and D were too short to separate small rates.
+1. Sweep alpha at one fixed cfl (16) and R, restarting from a psi checkpoint: alpha = 0.2, 0.5, 1.0, 2.0, with about 1 ns fitted by `ringfit.py` after a 0.3 ns skip. That is 1.3 ns, about 16,000 steps per point, or 1.2 h on 4 GPUs; the fit resolved C to about 0.01 %/ns over 1 ns. Watch the high-frequency line at each alpha.
 2. Find a PML setting where the rate stops changing as the PML is strengthened. Only that rate is real radiation loss.
 3. Then repeat the air-thickness test (225, 450 um) at one fixed cfl with that setting. 450 um needs about 7.8 h on 4 GPUs at cfl 16, so it spans two sessions via checkpoints.
 4. Identify which z wall matters: PEC on one z wall, PML on the other. This changes the domain size, so it must start from t = 0.
